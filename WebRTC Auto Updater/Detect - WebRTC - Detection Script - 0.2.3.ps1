@@ -9,46 +9,39 @@ See LICENSE in the project root for license information.
 #####################################
 
 Param(
-[parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
-[string]$logpath = "$env:windir\temp\TeamsWebRTC-detect.log"
+    [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
+    [string]$logpath = "$env:windir\temp\TeamsWebRTC-detect.log"
 )
 
 #Retrives the version number of the current Web RTC client
-function get-CurrentRTCver{
+function get-CurrentRTCver {
     
     $response = (Invoke-WebRequest -Uri "https://aka.ms/msrdcwebrtcsvc/msi" -UseBasicParsing)
     $response.headers.'Content-Disposition'
-    $versionC = $response.Headers.'Content-Disposition' -replace ".*HostSetup_","" -replace ".x64.msi*","" 
-    
+    $versionC = $response.Headers.'Content-Disposition' -replace ".*HostSetup_", "" -replace ".x64.msi*", "" 
     $string = "The latest available version of the WebRTC client is " + $versionC
     update-log -Data $string -Class Information -output both
-
     $global:currentversion = $versionC
     return $versionC
 }
 
 #Retrieves the installed version of the Web RTC client
-function get-installedRTCver{
-    if ((test-path -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\AddIns\WebRTC Redirector\') -eq $true)
-        {
+function get-installedRTCver {
+    if ((test-path -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\AddIns\WebRTC Redirector\') -eq $true) {
 
         $version = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\AddIns\WebRTC Redirector\')
-    
         $string = "The currently installed version of the WebRTC client is " + $version.currentversion
         update-log -Data $string -Class Information -output both
-
         return $version.currentversion
-        }
-        else
-        {
+    }
+    else {
         update-log -data "It doesn't appear that the WebRTC client is installed" -Class Warning -output both
         return "0"
 
-        }
+    }
 }
-
 #Logging function
-function update-log{
+function update-log {
     Param(
         [Parameter(
             Mandatory = $true, 
@@ -57,23 +50,18 @@ function update-log{
             Position = 0
         )]
         [string]$Data,
-
         [validateset('Information', 'Warning', 'Error', 'Comment')]
         [string]$Class = "Information",
-
         [validateset('Console', 'File', 'Both')]
         [string]$Output 
 
     )
 
-
-
     $date = get-date -UFormat "%m/%d/%y %r"
-    $String = $Class + " " +  $date + " " +$data
-
-    if ($Output -eq "Console"){Write-Output $string | out-host}
-    if ($Output -eq "file"){Write-Output $String | out-file -FilePath $logpath -Append}
-    if ($Output -eq "Both"){
+    $String = $Class + " " + $date + " " + $data
+    if ($Output -eq "Console") { Write-Output $string | out-host }
+    if ($Output -eq "file") { Write-Output $String | out-file -FilePath $logpath -Append }
+    if ($Output -eq "Both") {
         Write-Output $string | out-host
         Write-Output $String | out-file -FilePath $logpath -Append
     }
@@ -81,29 +69,28 @@ function update-log{
 }
 
 #function to detect if Teams is installed
-function get-teamsinstall{
+function get-teamsinstall {
     $rootpath = "c:\users\"
 
     $userfolders = (get-childitem $rootpath -Attributes directory).Name
 
     $count = 0
-    foreach ($userfolder in $userfolders){
-        if ($userfolder -ne "Public"){
+    foreach ($userfolder in $userfolders) {
+        if ($userfolder -ne "Public") {
             
-            if ((test-path -Path "c:\users\$userfolder\Appdata\Local\Microsoft\Teams\current\teams.exe") -eq $true){
+            if ((test-path -Path "c:\users\$userfolder\Appdata\Local\Microsoft\Teams\current\teams.exe") -eq $true) {
                 $count = $count + 1
             }
         }
     }
 
-    if ($count -eq '0'){
+    if ($count -eq '0') {
         update-log -data "Teams install not found. User may not have logged into machine yet. Returning Compliant" -Class Information -Output Both
         Exit 0
-        }
-        else
-        {
+    }
+    else {
         update-log -data "Teams install found." -Class Information -Output Both
-        }
+    }
 }
 
 #Writes the header of the log
@@ -117,60 +104,35 @@ get-teamsinstall
 #Calls the function to get the current available version number
 $Global:currentversion = $null
 $RTCCurrent = get-currentRTCver 
-$RTCCurrent = $Global:currentversion #I cheated here. There must be a bug returing the variable correctly from the get-currentRTCver function ¯\_(ツ)_/¯
+$RTCCurrent = $Global:currentversion 
 
 #Calls the function to get the installed version number
 $RTCInstalled = get-installedRTCver -Erroraction SilentlyContinue
 
 #Handles the error code if Web RTC client is not installed.
-if ($RTCInstalled -eq $null){
+if ($RTCInstalled -eq $null) {
+ 
     update-log -Data "WebRTC client was not detected. Returning Non-compliant" -Class Warning -output both
-    #Return 1
     Exit 1
-    }
+}
 
 #Handles the error code if the Web RTC client is out of date.
-if ($RTCInstalled -lt $RTCCurrent){
-
-#    $String = "The installed version of WebRTC is " + $RTCinstalled
-#    update-log -Data "$String" -Class Warning -output both
-
-#    $String = "The latest version of WebRTC is " + $RTCCurrent
-#    update-log -Data "$String" -Class Warning -output both
+if ($RTCInstalled -lt $RTCCurrent) {
 
     update-log -Data "WebRTC was detected to be out of date. Returning Non-compliant" -Class Warning -output both
-    
-    #Return 1
-    
     Exit 1
-    }
+}
 
 #Handles the error code if the installed agent is newer than the latest available client. (shouldn't happen)
 if ($RTCInstalled -gt $RTCCurrent) {
     
- #   $String = "Installed version of WebRTC is " + $RTCInstalled
- #   update-log -data $String -output both -Class Warning
-
-#    $String = "Latest version of WebRTC is " + $RTCCurrent
-#    update-log -data $String -output both -Class Warning
-
-    update-log -data "You really shouldn't be getting this error" -Class Warning -output both
-    #Return 1
+    update-log -data "The installed version is newer than what is available." -Class Warning -output both
     exit 1
-    }
+}
 
 #Handles the error code if the agent is current.
-if ($RTCInstalled -eq $RTCCurrent){
-
-#    $String = "The installed version of WebRTC is $RTCinstalled"
-#    update-log -Data "$String" -Class Information -output both
-
-#    $String = "The latest version of WebRTC is $RTCCurrent"
-#    update-log -Data "$String" -Class Information -output both
-    
+if ($RTCInstalled -eq $RTCCurrent) {
+   
     update-log -Data "The WebRTC client is current. Returning Compliant" -Class Information -output both
-#    update-log -Data "Returning Compliant" -Class Information -output both
-    
-    #Return 0
     Exit 0
-    }
+}
