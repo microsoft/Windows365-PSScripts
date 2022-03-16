@@ -47,3 +47,7 @@ sessions if they have accidentally disconnected from their Cloud PC, and are imm
 -Timeout
 
 This is a parameter to specify how long the script should continue to try and install before quitting. The default value is 60 minutes.
+
+## Logging
+
+Verbose logging is built into the script. By default, the scripts write their logs to c:\windows\temp. This can be changed by using the parameter -logpath. While Proactive Remediation should be able to help diagnose upgrade issues, looking at the logs can provide further insight into the script behavior.

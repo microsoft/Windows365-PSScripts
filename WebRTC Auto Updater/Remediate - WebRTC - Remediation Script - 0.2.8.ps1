@@ -130,8 +130,6 @@ function invoke-remediation {
 function invoke-userdetect {
     update-log -data "Detecting user state." -Class Information -output both 
     $explorerprocesses = @(Get-WmiObject -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
-
-    #    $explorerprocesses = @(Get-CIMInstance -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
     if ($explorerprocesses.Count -eq 0) {
         update-log -data "There is not a user logged in. Skipping user state detection." -Class Information -Output both
         Return 
