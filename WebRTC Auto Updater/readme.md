@@ -8,6 +8,8 @@ This script solution aims to solve these problems by detecting both the latest a
 the script will download the latest version automatically.  The script also detects if the user state is active or disconnected, and only installing
 the upgrade when the user state is disconnected – avoiding end user impact.
 
+> This solution will not work in a multi-session environment, nor with user profiles managed by FSLogix. 
+
 ## Deploying with Proactive Remediation
 
 ### Detection Script
