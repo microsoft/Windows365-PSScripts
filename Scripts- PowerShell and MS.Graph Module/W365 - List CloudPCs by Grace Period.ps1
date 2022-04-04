@@ -75,7 +75,11 @@ $CloudPCs = Get-MgDeviceManagementVirtualEndpointCloudPC
 
 write-host ""
 Write-Host "Cloud PCs in Grace Period"
-foreach ($CloudPC in $CloudPCs) {
-    if ($CloudPC.GracePeriodEndDateTime -ne $null) { write-host $CloudPC.ManagedDeviceName }
 
+foreach ($CloudPC in $CloudPCs){
+    if ($CloudPC.Status -eq "inGracePeriod"){
+        write-host "PC Name - "$CloudPC.ManagedDeviceName
+        write-host "Grace Period Ends - "$CloudPC.GracePeriodEndDateTime
+        write-host ""
+    }
 }
