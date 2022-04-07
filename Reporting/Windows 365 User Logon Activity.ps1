@@ -67,6 +67,27 @@ function connect-msgraph {
     Write-Output $text | out-host
 }
 
+#Function to connect to the MS.Graph PowerShell Enterprise App
+function connect-aad {
+
+    $AADtenant = Get-AzureADTenantDetail
+    if ($AADtenant.ObjectId -eq $null) {
+        write-output "Not connected to Azure AD. Connecting..." | out-host
+        try {
+            Connect-AzureAD -ErrorAction Stop | Out-Null
+        }
+        catch {
+            write-output "Failed to connect to Azure AD" | out-host
+            write-output $_.Exception.Message | out-host
+            Return 1
+        }   
+    }
+    $AADtenant = Get-AzureADTenantDetail
+    $text = "Tenant ID is " + $AADtenant.ObjectId
+    Write-Output "Connected to Azure AD" | out-host
+    Write-Output $text | out-host
+}
+
 #Function to check if AzureADPreview module is installed and up-to-date
 function invoke-AzureADPreview {
     $AADPavailable = (find-module -name microsoft.graph)
@@ -118,28 +139,26 @@ if (invoke-AzureADPreview -eq 1) {
     Return 1
 }
 
+#Command to connect to AzureAD PowerShell app
+if (connect-aad -eq 1) {
+    write-output "Connecting to AzureAD failed. Exiting..." | out-host
+    Return 1
+}
 
 set-profile
 
-Connect-AzureAD
-
 #gets date, applies offset, and formats date so query can use it
-$adjdate = (get-date).AddDays(-$($offset)) 
+$adjdate = (get-date).AddDays( - $($offset)) 
 $string = "$($adjdate.Year)" + "-" + "$($adjdate.Month)" + "-" + "$($adjdate.Day)"
 
 #gets all cloudpcs
-#Graph API equivalent is GET /deviceManagement/virtualEndpoint/cloudPCs
 $cloudPCs = Get-MgDeviceManagementVirtualEndpointCloudPC
 
 #gets all AAD logons over time period for Web Portal
-#Graph API call equivalent should be GET https://graph.microsoft.com/v1.0/auditLogs/signIns?&$filter=startsWith(appDisplayName,'Graph')&top=1
-#That example has not been formatted to get the correct data, but that should be the call to work with
 $WebString = "appdisplayname eq 'Windows 365 Portal' and createdDateTime gt $string"
 $WebLogons = Get-AzureADAuditSignInLogs -Filter $WebString
 
 #gets all AAD logons over time period for Local Clients
-#Graph API call equivalent should be GET https://graph.microsoft.com/v1.0/auditLogs/signIns?&$filter=startsWith(appDisplayName,'Graph')&top=1
-#That example has not been formatted to get the correct data, but that should be the call to work with
 $ClientString = "appdisplayname eq 'Azure Virtual Desktop Client' and createdDateTime gt $string"
 $ClientLogons = get-AzureADAuditSignInLogs -Filter $ClientString
 
@@ -149,63 +168,60 @@ write-host ""
 
 #gets all users assigned to a cloud pc
 $users = @()
-foreach ($CloudPC in $CloudPCs){
-
+foreach ($CloudPC in $CloudPCs) {
     $users += $CloudPC.UserPrincipalName
 }
 
-#output user name and their assigned cloud PC name
-foreach ($user in $users){
+#output user name, their assigned cloud PC name, and usage data
+foreach ($user in $users) {
 
-        #declare array for CSV output
-        $output = [PSCustomObject]@{
+    #declare array for CSV output
+    $output = [PSCustomObject]@{
         "CPCUserPrincipalName" = ""
         "CPCManagedDeviceName" = ""
-        "LastLogon" = ""
-        "TotalLogons" = ""
-        "WebLogons" = ""
-        "ClientLogons" = ""
-        "TotalDays" = "$offset"
-        }
+        "LastLogon"            = ""
+        "TotalLogons"          = ""
+        "WebLogons"            = ""
+        "ClientLogons"         = ""
+        "TotalDays"            = "$offset"
+    }
     
     #sets count variables to null so each user logon count is accurate
     $countweb = $null
     $countclient = $null
+    $LastLogon = $null
 
     #outputs user UPN
     Write-Host $user
     $output.CPCUserPrincipalName = $user
     
     #Finds the name of the cloudPC the user has
-    foreach ($CloudPC in $cloudPCs){
-        if ($CloudPC.UserPrincipalName -eq $user){
+    foreach ($CloudPC in $cloudPCs) {
+        if ($CloudPC.UserPrincipalName -eq $user) {
             write-host $CloudPC.ManagedDeviceName
             $output.CPCManagedDeviceName = $CloudPC.ManagedDeviceName
-            }
+        }
     }
-
-    #Resets LastLogon variable
-    $LastLogon = $null
     
     #Counts each web logon
-    foreach ($WebLogon in $WebLogons){
-        if ($WebLogon.UserPrincipalName -eq $user){
-            $countweb = $countweb +1
-            if ($Weblogon.CreatedDateTime -gt $LastLogon){$LastLogon = $WebLogon.CreatedDateTime}    
+    foreach ($WebLogon in $WebLogons) {
+        if ($WebLogon.UserPrincipalName -eq $user) {
+            $countweb = $countweb + 1
+            if ($Weblogon.CreatedDateTime -gt $LastLogon) { $LastLogon = $WebLogon.CreatedDateTime }    
             
         }
 
     }
-    if ($countweb -eq $null){$countweb = 0}
+    if ($countweb -eq $null) { $countweb = 0 }
     
     #Counts each local client logon
-    foreach ($ClientLogon in $ClientLogons){
-        if ($ClientLogon.UserPrincipalName -eq $user){
-            $countclient = $countclient +1
-            if ($Clientlogon.CreatedDateTime -gt $LastLogon){$LastLogon = $LastLogon.CreatedDateTime}
+    foreach ($ClientLogon in $ClientLogons) {
+        if ($ClientLogon.UserPrincipalName -eq $user) {
+            $countclient = $countclient + 1
+            if ($Clientlogon.CreatedDateTime -gt $LastLogon) { $LastLogon = $LastLogon.CreatedDateTime }
         }
     }
-    if ($countclient -eq $null){$countclient = 0}
+    if ($countclient -eq $null) { $countclient = 0 }
     
     #adds both logon counts for a total
     $total = $countweb + $countclient
@@ -225,7 +241,7 @@ foreach ($user in $users){
     $output.LastLogon = $LastLogon
     
     #outputs notification if no logon activity has been recorded
-    if ($total -eq 0){write-host "User has not logged in." -ForegroundColor Red}
+    if ($total -eq 0) { write-host "User has not logged in." -ForegroundColor Red }
 
     write-host ""
 
