@@ -4,8 +4,6 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#WARNING - This script has not fully been tested, use at your own risk
-
 #This script requires the AzureADPreview module be installed. During testing, I found that if the
 #AzureAD module is installed, it will conflict with the Preview module and fail to install. The AzureAD
 #module may have to be uninstalled before isntalling the Preview module.
