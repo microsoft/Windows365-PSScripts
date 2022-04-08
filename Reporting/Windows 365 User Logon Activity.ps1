@@ -22,20 +22,28 @@ function invoke-graphmodule {
     $graphavailable = (find-module -name microsoft.graph)
     $vertemp = $graphavailable.version.ToString()
     Write-Output "Latest version of Microsoft.Graph module is $vertemp" | out-host
-    $graphcurrent = (get-installedmodule -name Microsoft.Graph -ErrorAction SilentlyContinue) 
 
-    if ($graphcurrent -eq $null) {
-        write-output "Microsoft.Graph module is not installed. Installing..." | out-host
-        try {
-            Install-Module Microsoft.Graph -Force -ErrorAction Stop
-        }
-        catch {
-            write-output "Failed to install Microsoft.Graph Module" | out-host
-            write-output $_.Exception.Message | out-host
-            Return 1
+    foreach ($module in $modules){
+        write-host "Checking module - " $module
+        $graphcurrent = (get-installedmodule -name $module -ErrorAction SilentlyContinue)
+
+        if ($graphcurrent -eq $null) {
+            write-output "Module is not installed. Installing..." | out-host
+            try {
+                Install-Module -name $module -Force -ErrorAction Stop 
+                Import-Module -name $module -force -ErrorAction Stop 
+
+                }
+            catch {
+                write-output "Failed to install " $module | out-host
+                write-output $_.Exception.Message | out-host
+                Return 1
+                }
         }
     }
-    $graphcurrent = (get-installedmodule -name Microsoft.Graph)
+
+
+    $graphcurrent = (get-installedmodule -name Microsoft.Graph.DeviceManagement.Functions)
     $vertemp = $graphcurrent.Version.ToString() 
     write-output "Current installed version of Microsoft.Graph module is $vertemp" | out-host
 
@@ -67,9 +75,11 @@ function connect-msgraph {
 
 #Function to connect to the MS.Graph PowerShell Enterprise App
 function connect-aad {
-
-    $AADtenant = Get-AzureADTenantDetail
-    if ($AADtenant.ObjectId -eq $null) {
+    
+    try{
+        $AADtenant = Get-AzureADTenantDetail -ErrorAction Stop | Out-Null
+    }
+    catch{
         write-output "Not connected to Azure AD. Connecting..." | out-host
         try {
             Connect-AzureAD -ErrorAction Stop | Out-Null
@@ -78,17 +88,19 @@ function connect-aad {
             write-output "Failed to connect to Azure AD" | out-host
             write-output $_.Exception.Message | out-host
             Return 1
-        }   
+        }
     }
+   
     $AADtenant = Get-AzureADTenantDetail
     $text = "Tenant ID is " + $AADtenant.ObjectId
     Write-Output "Connected to Azure AD" | out-host
     Write-Output $text | out-host
-}
 
+    }
+  
 #Function to check if AzureADPreview module is installed and up-to-date
 function invoke-AzureADPreview {
-    $AADPavailable = (find-module -name microsoft.graph)
+    $AADPavailable = (find-module -name AzureADPreview)
     $vertemp = $AADPavailable.version.ToString()
     Write-Output "Latest version of AzureADPreview module is $vertemp" | out-host
     $AADPcurrent = (get-installedmodule -name AzureADPreview -ErrorAction SilentlyContinue) 
@@ -104,11 +116,12 @@ function invoke-AzureADPreview {
             Return 1
         }
     }
-    $AADPcurrent = (get-installedmodule -name Microsoft.Graph)
+    $AADPcurrent = (get-installedmodule -name AzureADPreview)
     $vertemp = $AADPcurrent.Version.ToString() 
     write-output "Current installed version of AzureADPreview module is $vertemp" | out-host
 
-    if ($AADPavailable.Version -gt $gAADPcurrent.Version) { write-host "There is an update to this module available." }
+
+    if ($AADPavailable.Version -gt $AADPcurrent.Version) { write-host "There is an update to this module available." }
     else
     { write-output "The installed AzureADPreview module is up to date." | out-host }
 }
@@ -118,6 +131,16 @@ function set-profile {
     Write-Output "Setting profile as beta..." | Out-Host
     Select-MgProfile -Name beta
 }
+
+$modules = @("Microsoft.Graph.DeviceManagement.Functions",
+                "Microsoft.Graph.DeviceManagement.Administration",
+                "Microsoft.Graph.DeviceManagement.Enrolment",
+                "Microsoft.Graph.Users.Functions",
+                "Microsoft.Graph.DeviceManagement.Actions",
+                "Microsoft.Graph.Users.Actions"
+            )
+
+$WarningPreference = 'SilentlyContinue'
 
 #Commands to load MS.Graph modules
 if (invoke-graphmodule -eq 1) {
@@ -131,6 +154,8 @@ if (connect-msgraph -eq 1) {
     Return 1
 }
 
+set-profile
+
 #Commands to load AzureADPreview modules
 if (invoke-AzureADPreview -eq 1) {
     write-output "Invoking AzureADPreview failed. Exiting..." | out-host
@@ -143,8 +168,6 @@ if (connect-aad -eq 1) {
     Return 1
 }
 
-set-profile
-
 #gets date, applies offset, and formats date so query can use it
 $adjdate = (get-date).AddDays( - $($offset)) 
 $string = "$($adjdate.Year)" + "-" + "$($adjdate.Month)" + "-" + "$($adjdate.Day)"
@@ -152,13 +175,9 @@ $string = "$($adjdate.Year)" + "-" + "$($adjdate.Month)" + "-" + "$($adjdate.Day
 #gets all cloudpcs
 $cloudPCs = Get-MgDeviceManagementVirtualEndpointCloudPC
 
-#gets all AAD logons over time period for Web Portal
-$WebString = "appdisplayname eq 'Windows 365 Portal' and createdDateTime gt $string"
-$WebLogons = Get-AzureADAuditSignInLogs -Filter $WebString
-
-#gets all AAD logons over time period for Local Clients
-$ClientString = "appdisplayname eq 'Azure Virtual Desktop Client' and createdDateTime gt $string"
-$ClientLogons = get-AzureADAuditSignInLogs -Filter $ClientString
+#gets all AAD Windows logons over time period 
+$String = "appdisplayname eq 'Windows Sign In' and createdDateTime gt $string"
+$Logons = get-AzureADAuditSignInLogs -Filter $String
 
 write-host ""
 write-host "Count of user logons to Cloud PCs over last $offset days"
@@ -178,15 +197,12 @@ foreach ($user in $users) {
         "CPCUserPrincipalName" = ""
         "CPCManagedDeviceName" = ""
         "LastLogon"            = ""
-        "TotalLogons"          = ""
-        "WebLogons"            = ""
-        "ClientLogons"         = ""
+        "Logons"               = ""
         "TotalDays"            = "$offset"
     }
     
     #sets count variables to null so each user logon count is accurate
-    $countweb = $null
-    $countclient = $null
+    $count = $null
     $LastLogon = $null
 
     #outputs user UPN
@@ -201,38 +217,21 @@ foreach ($user in $users) {
         }
     }
     
+
     #Counts each web logon
-    foreach ($WebLogon in $WebLogons) {
-        if ($WebLogon.UserPrincipalName -eq $user) {
-            $countweb = $countweb + 1
-            if ($Weblogon.CreatedDateTime -gt $LastLogon) { $LastLogon = $WebLogon.CreatedDateTime }    
-            
-        }
+    foreach ($Logon in $Logons) {
 
-    }
-    if ($countweb -eq $null) { $countweb = 0 }
-    
-    #Counts each local client logon
-    foreach ($ClientLogon in $ClientLogons) {
-        if ($ClientLogon.UserPrincipalName -eq $user) {
-            $countclient = $countclient + 1
-            if ($Clientlogon.CreatedDateTime -gt $LastLogon) { $LastLogon = $LastLogon.CreatedDateTime }
+        if (($Logon.UserPrincipalName -eq $user) -and ($Logon.DeviceDetail.Displayname -like "CPC-*")) {
+            $count = $count + 1
+
+            if ($logon.CreatedDateTime -gt $LastLogon) { $LastLogon = $Logon.CreatedDateTime }    
         }
     }
-    if ($countclient -eq $null) { $countclient = 0 }
-    
-    #adds both logon counts for a total
-    $total = $countweb + $countclient
-    write-host "Total CloudPC logons is $total"
-    $output.TotalLogons = $total
-
-    #outputs web client logon count
-    write-host "Web Client Logon count is $countweb"
-    $output.WebLogons = $countweb
+    if ($count -eq $null) { $count = 0 }
     
     #outputs local client logon count
-    write-host "Local client count is $countclient"
-    $output.ClientLogons = $countclient
+    write-host "Logon count is $count"
+    $output.Logons = $count
 
     #outputs the last logon time
     write-host "User's last logon time is"$LastLogon
@@ -246,5 +245,4 @@ foreach ($user in $users) {
     #sends data to CSV file
     $output | export-csv -Path $logpath -NoTypeInformation -append
 }
-
 
