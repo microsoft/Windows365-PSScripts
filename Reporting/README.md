@@ -1,5 +1,5 @@
 # Windows 365 User Logon Activity Script
-Currently Windows 365 does not have a way to report how often users are actually using their CloudPC. This example script aims to provide that information by querying the Azure AD Logon logs and comparing this data against every user who has a provisioned Cloud PC. The script returns a count of every logon a user has completed against their Cloud PC, as well as their last logon time. The script does not return session duration.
+Currently Windows 365 does not have a way to report how often users are actually using their CloudPC. This example script aims to provide that information by querying the Azure AD Sign-In logs with the filter Application set to Windows Sign In, and then comparing this data against every user who has a provisioned Cloud PC. The script returns a count of every logon a user has completed against their Cloud PC, as well as their last logon time. The script **does not** return session duration.
 
 This script is provided as an example. Support will not be provided. 
 
