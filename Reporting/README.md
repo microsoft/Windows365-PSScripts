@@ -14,7 +14,9 @@ This script uses two PowerShell modules to ingest data. Microsoft.Graph for Clou
 - Microsoft.Graph.DeviceManagement.Actions
 - Microsoft.Graph.Users.Actions
 
-> **If the computer running this script has the AzureAD module installed, there may be conflicts with the AzureADPreview module. It may be required to uninstall the AzureAD module to avoid the conflict**
+This script will install the AzureADPreview module automatically if it isn't already installed. 
+
+> **The AzureADPreview module is not compatible with the AzureAD module. If the AzureAD module is installed, the script will notify the user to uninstall the module, close all PowerShell sessions, and to try again.**
 
 ## Usage
 

@@ -132,6 +132,22 @@ function set-profile {
     Select-MgProfile -Name beta
 }
 
+#function to detect if AzureAD module is installed
+function invoke-azureadcheck {
+    try
+    {
+    Get-InstalledModule -Name AzureAD -ErrorAction Stop | Out-Null
+    Write-Host "AzureAD module is installed" -ForegroundColor Red
+    Return 1
+    }
+    
+    catch
+    {
+    Write-Host "AzureAD module is not installed"
+    Return 0
+    }   
+}
+
 $modules = @("Microsoft.Graph.DeviceManagement.Functions",
                 "Microsoft.Graph.DeviceManagement.Administration",
                 "Microsoft.Graph.DeviceManagement.Enrolment",
@@ -141,6 +157,14 @@ $modules = @("Microsoft.Graph.DeviceManagement.Functions",
             )
 
 $WarningPreference = 'SilentlyContinue'
+
+#Command to check if AzureAD module is installed and exit if it is.
+if (invoke-azureadcheck -eq 1) {
+    write-host "The AzureAD module is not compatibile with AzureADPreivew" -ForegroundColor Red
+    write-host "Please uninstall the AzureAD module, close all PowerShell sessions," -ForegroundColor Red
+    Write-Host "and run this script again" -ForegroundColor Red
+    Return 1
+}
 
 #Commands to load MS.Graph modules
 if (invoke-graphmodule -eq 1) {
