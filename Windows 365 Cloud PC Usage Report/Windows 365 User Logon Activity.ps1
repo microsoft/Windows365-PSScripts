@@ -4,9 +4,9 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#This script requires the AzureADPreview module be installed. During testing, I found that if the
-#AzureAD module is installed, it will conflict with the Preview module and fail to install. The AzureAD
-#module may have to be uninstalled before isntalling the Preview module.
+#This script requires the AzureADPreview module be installed. This module is not compatible
+#with the AzureAD module. If the AzureAD module is installed, it must be removed prior to 
+#running this script.
 
 Param(
     [parameter(mandatory = $false, HelpMessage = "over how many days")] 
