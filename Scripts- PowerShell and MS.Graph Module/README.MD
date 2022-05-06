@@ -10,7 +10,7 @@ This script checks to see if the required PowerShell module is installed, checks
 ***
 
 ### W365 - Deprovision All Grace Period CloudPCs.ps1
-This script outputs a list of CloudPCs that are in a Grace Period.
+This script Deprovisions all CloudPCs that are in a Grace Period.
 ***
 
 ### W365 - List CloudPCs by Grace Period.ps1
