@@ -82,7 +82,7 @@ foreach ($CloudPC in $CloudPCs){
     if ($CloudPC.Status -eq "inGracePeriod"){
 
         Stop-MgDeviceManagementVirtualEndpointCloudPcGracePeriod -CloudPCId $CloudPC.Id
-        write-host "Deprovisioning started for CPC Name - "$CloudPC.ManagedDeviceName ForegroundColor Green
+        write-host "Deprovisioning started for CPC Name - "$CloudPC.ManagedDeviceName
         write-host ""
     }
 }
