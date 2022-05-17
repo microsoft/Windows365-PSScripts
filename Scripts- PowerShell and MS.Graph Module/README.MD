@@ -9,6 +9,10 @@ The hope is that the scripts will help others build their own solutions without 
 This script checks to see if the required PowerShell module is installed, checks to see if it is current, prompts the user to authenticate, and then sets the proper scope. It's everything you need to get started - just add your own code!
 ***
 
+### W365 - Deprovision All Grace Period CloudPCs.ps1
+This script Deprovisions all CloudPCs that are in a Grace Period.
+***
+
 ### W365 - List CloudPCs by Grace Period.ps1
 This script outputs a list of CloudPCs that are in a Grace Period.
 ***
