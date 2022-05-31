@@ -263,13 +263,19 @@ function invoke-teamslocation {
     else {
         update-log -Data "Program Files does not contain a Teams installation" -Class Information -Output Both
     }
-
     return $count
 }
 
 #Function to remove reg key that can block Teams client from installing
 function delete-regkey {
-    $value = Get-Item -Path HKCU:\Software\Microsoft\Office\Teams
+    try {
+        update-log -Data "Looking up Registry Key value..." -Class Information -Output Both
+        $value = Get-Item -Path HKCU:\Software\Microsoft\Office\Teams -ErrorAction Stop
+    }
+    catch {
+        update-log -Data "Could not find Registry Key. This is not fatal." -Class Information -Output Both
+    }
+    
     if ($value.Property -eq "PreventInstallationFromMsi") {
         update-log -Data "Removing PreventInstallationFromMsi Reg Key" -Class Information -Output Both
         try {
@@ -281,7 +287,6 @@ function delete-regkey {
             exit 1
         }
     }
-
 }
 
 #function to create scheduled task to launch Teams client installer for end user

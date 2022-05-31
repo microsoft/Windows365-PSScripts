@@ -22,7 +22,7 @@ The following steps are what happens during Remediation:
 
 At this point, when the user logs into their Cloud PC, the Teams client should install automatically.
 
-If a user is determined to be logged into the Cloud PC, Teams client will not automatically install until the CPC is rebooted or the user logs out and back in. This is not a desireable outcome as it impacts the user and can possibly generate help desk tickets. In order to avoid this situation, if the remediation script determines the user is logged in, the following steps occur:
+If a user is logged into the Cloud PC after the prior steps complete, Teams client will not automatically install until the CPC is rebooted or the user logs out and back in. This is not a desireable outcome as it impacts the user and can possibly generate help desk tickets. In order to avoid this situation, if the remediation script determines the user is logged in, the following steps occur:
 - Determines the users' SID from the registry
 - Creates a XML file with information to create a Scheduled Task
 - Creates a PS1 file for the Scheduled Task to run
