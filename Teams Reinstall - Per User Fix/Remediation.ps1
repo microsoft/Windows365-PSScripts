@@ -149,7 +149,7 @@ function uninstall-machinewide {
     }
 
     $guid = $Uninstall.replace("MsiExec.exe /I", "")
-    update-log -Data "Uninstalling existing Teams Machine Wide Installer..."
+    update-log -Data "Uninstalling existing Teams Machine Wide Installer..." -Class Information -Output Both
     $process = start-process -FilePath C:\windows\System32\msiexec.exe -Args @('/X', "`"$guid`"", '/qb-') -Wait -PassThru
     if ($process.ExitCode -ne 0) {
         update-log -Data "Machine Wide Installer failed to uninstall." -Class Error -Output Both
