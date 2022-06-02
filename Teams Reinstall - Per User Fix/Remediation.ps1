@@ -4,7 +4,7 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#version v0.1
+#version v0.2
 
 Param(
     [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
@@ -258,7 +258,7 @@ function invoke-teamslocation {
             $Count = $Count + 1
         }
         else
-        { update-log -Data "Progran Files is not the install location" -Class Information -Output Both }
+        { update-log -Data "Program Files is not the install location" -Class Information -Output Both }
     }
     else {
         update-log -Data "Program Files does not contain a Teams installation" -Class Information -Output Both
@@ -441,6 +441,16 @@ function create-SchedPS1 {
         remove-temm -path c:\windows\temp\teamsinstall.ps1 -force -ErrorAction Continue
 
     }
+    try{
+        update-log -data "Creating child script for scheduled task..." -Class Information -Output Both
+        $scriptblock | Out-String -Width 4096 | Out-File -FilePath c:\windows\temp\teamsinstall.ps1 -Force -ErrorAction Stop
+    }
+    catch
+    {
+        update-log -data "Failed to create the child script. Reboot PC and Teams client should install" -Class Error -Output Both
+        Update-Log -data $_.Exception.Message -Class Error -Output Both
+        exit 1
+    }
 }
 
 #function to retrieve users' SID for use in scheduled task
@@ -461,6 +471,45 @@ function get-sid {
     Exit 1
 }
 
+#function to check if child script has already run.
+function invoke-preruncheck{
+    $fail = 0
+    $TaskTemp = Get-ScheduledTask | where{$_.TaskName -eq 'InstallTeams-Remediation'}
+
+    if ($TaskTemp.state -eq "Ready"){update-log -data "Scheduled Task state is Ready" -Class Comment -Output Both}
+        else{
+        update-log -Data "Scheduled Tak not ready" -Class Information -Output Both
+        $fail = $fail + 1
+        }
+
+    if ((test-path -Path c:\windows\temp\teamsinstall.ps1) -eq $true){
+        update-log -Data "PS1 file for scheduled task exists" -Class Information -Output Both }
+        else{
+        update-log -data "PS1 does not exist" -Class Information -Output Both
+        $fail = $fail + 1
+        }
+
+
+    if ((test-path -path c:\windows\temp\TeamsMWInstaller.msi) -eq $true){
+        update-log -Data "Teams Machine Wide Installer MSI file exists" -Class Information -Output Both}
+        else{
+        update-log -data "MSI doesn't exist" -Class Information -Output Both
+        $fail = $fail + 1}
+
+    if ((test-path -Path C:\windows\temp\InstallTeams-Remediation.xml) -eq $true){update-log -data "Scheduled Task XML exists" -Class Information -Output Both
+        update-log -data "All files and conditions indicate user hasn't logged in yet" -Class Information -Output Both }
+        else{
+        update-log -data "XML doesn't exist" -Class Information -Output Both
+        $fail = $fail + 1
+        }
+                
+
+    if ($fail -eq 0){
+        update-log -Data "Remediation complete, user hasn't logged in yet" -Class Information -Output Both
+        exit 1
+        }
+    if ($fail -gt 0){update-log -Data "$fail conditions are missing. Triggering install" -Class Information -Output both}
+}
 
 $userstate = invoke-userdetect
 if ($userstate -eq 2) {
@@ -468,6 +517,8 @@ if ($userstate -eq 2) {
     Return 1
     #Exit 1
 }
+
+invoke-preruncheck
 
 download-teams
 
