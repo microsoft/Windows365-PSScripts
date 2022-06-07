@@ -4,7 +4,7 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#version v0.2
+#version v1.0
 
 Param(
     [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
