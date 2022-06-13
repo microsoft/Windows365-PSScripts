@@ -24,8 +24,7 @@ function invoke-modulecheck {
             write-output "Module is not installed. Installing..." | out-host
             try {
                 Install-Module -name $module -Force -ErrorAction Stop 
-                Import-Module -name $module -force -ErrorAction Stop 
-
+                Import-Module -name $module -Force -ErrorAction Stop 
             }
             catch {
                 write-output "Failed to install " $module | out-host
@@ -37,10 +36,14 @@ function invoke-modulecheck {
         $currentver = (find-module -name $module).version.ToString()
         $installedver = (get-installedmodule -name $module).version.tostring()
 
-        if ($currentver -gt $installedver) { write-host "There is an update to this module." }
-        else
-        { write-host "This module is up to date" }
-
+        if ($currentver -gt $installedver) { 
+            write-host "There is an update to this module."
+            write-host "The module will not be upgraded automatically"
+            write-host "Consider upgrading the module using the Update-Module commandlet" 
+        }
+        else{   
+            write-host "This module is up to date" 
+        }
     }
 }
 
@@ -59,7 +62,14 @@ function connect-azure {
             Exit
         }   
     }
+    
     $tenant = get-aztenant
+    if ($tenant.Tenant.ID -eq $null){
+        write-output "Couldn't retrieve the tenant id. Try again." | out-host
+        write-output $_.Exception.Message | out-host
+        Exit
+    }
+
     $text = "Tenant ID is " + $tenant.TenantId
     Write-Output "Connected to Azure" | out-host
     Write-Output $text | out-host
@@ -79,12 +89,10 @@ function invoke-filecheck {
         write-host "Press C to Cancel"
         $input = Read-host -Prompt "Press O, A, or C"
 
-
         if ($input -eq "C") {
             write-host "Cancelling"
             exit
         }
-
 
         if ($input -eq "O") {
             write-host "Overwriting"
@@ -98,16 +106,13 @@ function invoke-filecheck {
             if ((test-path -Path $newname) -eq $true) {
                 write-host "removing old archive"
                 Remove-Item -Path $newname -Force
-
             }
             Rename-Item -Path $CSVFile -NewName $newname
             return
-    
         }
         write-host "Input not understood. Exiting"
         exit
     }
-
 }
 
 invoke-modulecheck
@@ -137,15 +142,12 @@ $count = 0
 foreach ($subnet in $subnets) {
     $count = $count + 1
     $index = $subnet.IndexOf('/')
-    
     if ($count -ne $subnets.count) {
         ($subnet.Substring(0, $index)) + ',' | out-file $CSVFile -Append
-          
     }
     else {
         ($subnet.Substring(0, $index)) | out-file $CSVFile -Append 
     }
-    
 }    
 
 write-host "$count gateways recorded to $CSVFile"
