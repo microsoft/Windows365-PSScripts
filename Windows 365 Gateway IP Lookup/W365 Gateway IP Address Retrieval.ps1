@@ -4,10 +4,13 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#v1.0
+#v2.0
 
 #output CSV file
-$CSVFile = "c:\temp\W365-Gateways.CSV"
+$CSVFile = "$PSSCriptRoot\W365-Gateways.CSV"
+
+#To check if PowerShell modules are out of date, set to $true
+$CheckUpdates = $false
 
 #modules required for this script
 $modules = @("az.accounts",
@@ -33,23 +36,24 @@ function invoke-modulecheck {
             }
         }
 
-        $currentver = (find-module -name $module).version.ToString()
-        $installedver = (get-installedmodule -name $module).version.tostring()
+        if ($CheckUpdates -eq $true) {
+            $currentver = (find-module -name $module).version.ToString()
+            $installedver = (get-installedmodule -name $module).version.tostring()
 
-        if ($currentver -gt $installedver) { 
-            write-host "There is an update to this module."
-            write-host "The module will not be upgraded automatically"
-            write-host "Consider upgrading the module using the Update-Module commandlet" 
-        }
-        else{   
-            write-host "This module is up to date" 
+            if ($currentver -gt $installedver) { 
+                write-host "There is an update to this module."
+                write-host "The module will not be upgraded automatically"
+                write-host "Consider upgrading the module using the Update-Module commandlet" 
+            }
+            else {   
+                write-host "This module is up to date" 
+            }
         }
     }
 }
 
 #prompt user to connect to Azure
 function connect-azure {
-
     $tenant = get-aztenant -ErrorAction SilentlyContinue
     if ($tenant.TenantId -eq $null) {
         write-output "Not connected to Azure. Connecting..." | out-host
@@ -62,92 +66,78 @@ function connect-azure {
             Exit
         }   
     }
-    
-    $tenant = get-aztenant
-    if ($tenant.Tenant.ID -eq $null){
-        write-output "Couldn't retrieve the tenant id. Try again." | out-host
-        write-output $_.Exception.Message | out-host
-        Exit
-    }
-
-    $text = "Tenant ID is " + $tenant.TenantId
     Write-Output "Connected to Azure" | out-host
-    Write-Output $text | out-host
 }
 
-#function to check for existing CSV file
-function invoke-filecheck {
-    if ((test-path -path (Split-Path $CSVFile -Parent)) -eq $false) {
-        write-host "Creating folder..."
-        new-item -Path (Split-Path $CSVFile -Parent) -ItemType Directory | Out-Null
-    } 
-
-    if ((test-path $CSVFile) -eq $true) {
-        write-host "Existing CSV Found"
-        write-host "Press O to Overwrite"
-        write-host "Press A to Archive"
-        write-host "Press C to Cancel"
-        $input = Read-host -Prompt "Press O, A, or C"
-
-        if ($input -eq "C") {
-            write-host "Cancelling"
-            exit
-        }
-
-        if ($input -eq "O") {
-            write-host "Overwriting"
-            Remove-Item -Path $CSVFile -Force
-            Return
-        } 
-
-        if ($input -eq "A") {
-            write-host "Archiving"
-            $newname = $CSVFile + ".old"
-            if ((test-path -Path $newname) -eq $true) {
-                write-host "removing old archive"
-                Remove-Item -Path $newname -Force
-            }
-            Rename-Item -Path $CSVFile -NewName $newname
-            return
-        }
-        write-host "Input not understood. Exiting"
+#function to download current Gateway IP list from Azure
+function invoke-download {
+    try {
+        write-host "retrieving service tags from Azure..."
+        $tags = Get-AzNetworkServiceTag -Location eastus2 -ErrorAction Stop 
+    }
+    catch {
+        write-host "failed to retrieve service tags."
+        write-host $_.Exception.Message
         exit
     }
+
+    #retrive subnets from Azure data
+    write-host "Parsing data..."
+    $addresses = $tags.Values | Where-Object { $_.name -eq "WindowsVirtualDesktop" }
+    $subnets = $addresses.Properties.AddressPrefixes
+
+    #remove temp.csv if found
+    if ((Test-Path -Path $PSScriptRoot\test.csv) -eq $true) {
+        write-host "removing temp CSV file"
+        Remove-Item -Path $PSSCriptRoot\test.csv -Force
+    }
+
+    #remove subnet masks to create gateways - output to temp.csv
+    $count = 0
+    foreach ($subnet in $subnets) {
+        $count = $count + 1
+        $index = $subnet.IndexOf('/')
+        if ($count -ne $subnets.count) {
+        ($subnet.Substring(0, $index)) + ',' | out-file $PSSCriptRoot\temp.csv -Append
+        }
+        else {
+        ($subnet.Substring(0, $index)) | out-file $PSSCriptRoot\temp.csv -Append 
+        }
+    }    
+    write-host "$count gateways found"
+}
+
+#Removes left over temp.csv file if found
+if ((Test-Path -Path $PSSCriptRoot\temp.csv) -eq $true) {
+    write-host "Removing stale temp file"
+    remove-item -Path $PSSCriptRoot\temp.csv -Force
 }
 
 invoke-modulecheck
 
 connect-azure
 
-invoke-filecheck
+invoke-download
 
-try {
-    write-host "retrieving service tags from Azure..."
-    $tags = Get-AzNetworkServiceTag -Location eastus2 -ErrorAction Stop 
-}
-catch {
-    write-host "failed to retrieve service tags."
-    write-host $_.Exception.Message
-    exit
-}
+if ((test-path $CSVFile) -eq $true) {
+    write-host "Existing CSV Found"
+    write-host "Importing Gateway IPs from existing CSV"
+    $CSVData1 = (Get-Content -Path $CSVfile) -replace ",", ""
+    $CSVData2 = (Get-Content -Path $PSScriptRoot\temp.csv) -replace ",", ""
+    $diff = Compare-Object -ReferenceObject $CSVData1 -DifferenceObject $CSVData2
 
-#retrive subnets from Azure data
-write-host "Parsing data..."
-$addresses = $tags.Values | Where-Object { $_.name -eq "WindowsVirtualDesktop" }
-$subnets = $addresses.Properties.AddressPrefixes
-
-#remove subnet masks to create gateways
-write-host "Writing gateways to CSV..."
-$count = 0
-foreach ($subnet in $subnets) {
-    $count = $count + 1
-    $index = $subnet.IndexOf('/')
-    if ($count -ne $subnets.count) {
-        ($subnet.Substring(0, $index)) + ',' | out-file $CSVFile -Append
+    if ($diff -eq $null) {
+        write-host "No changes to Gateway IP list detected."
+        remove-item -Path $PSSCriptRoot\temp.csv -Force
+        exit
     }
-    else {
-        ($subnet.Substring(0, $index)) | out-file $CSVFile -Append 
-    }
-}    
+    write-host "There is an update to the list"
+    write-host "Updating CSV File $CSVFile"
+    Remove-Item -Path $CSVFile -Force
+}
+else {
+    write-host "Outputting to CSV file $CSVFile"
+}
 
-write-host "$count gateways recorded to $CSVFile"
+Rename-Item -Path "$PSSCriptRoot\temp.csv" -NewName $CSVFile -Force
+    
