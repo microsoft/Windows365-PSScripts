@@ -4,15 +4,15 @@ This script helps to easily retrieve the Gateway IPs associated with the Windows
 
 ## Usage
 
-To use this script, simply run it. There are no parameters to pass. 
+Download the script and save it to a folder, then run it as Administrator from within the folder. There are no parameters accepted.
 
 ### How it works
 
-The script will check if the required modules (az.network and az.accounts) are installed and up to date. If they are not installed, the script will install them. If they are installed, but out of date, the script will state so - but will not update the modules.
+The script will check if the required modules (az.network and az.accounts) are installed. If they are not installed, the script will install and import them. The script can also check if the modules are out of date by changing the variable $CheckUpdates to $True. This is disabled by default to save time.
 
-It will then check to see if the path for the script is available, and if not, it will create the folder. If the CSV file is already present, the script will prompt to either Overwrite or Archive the existing CSV file. If Overwrite is chosen, the existing CSV file will be deleted and a new CSV file will be created. If Archive is chosen, the existing script will have a file extension of ".old" appended to the file. If an existing .old file exists, it will be deleted.
+The script will then prompt the user to provide Azure credentials. After successfully authenticating, the script will download the raw data, parse out the IP addresses, and write the list to a temporary CSV file.
 
-Next, the script will prompt the user to provide Azure credentials. Upon entering credentials, the script will query Azure, parse the data, and output the list of Gateway IP addresses to the CSV file.
+On the first run of the script, it will save the downloaded information in a new CSV file (W365-Gateways.CSV). The name of the CSV file can be changed by modifying the $CSVFile variable in the beginning of the script. Do not change the path in the variable.
 
-### Changing the output file
-The name and path of the CSV file can be changed by modifying the $CSVFile variable found near the beginning of the script. 
+On subsequent runs, the script it will import the data from the existing CSV file and compare it to the temporary CSV file for differences. If no difference is found, nothing in the list has changed and the script will exit. If a difference is found, the list has updated and the existing CSV (W365-Gateways.CSV) will be updated with the latest Gateway IP addresses.
+
