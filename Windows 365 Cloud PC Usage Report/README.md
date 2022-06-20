@@ -41,6 +41,8 @@ This value is the amount of days back that logons should be collected for. The d
 
 -Logpath
 
-This value is where the CSV output should be written to, as well as the file name. The default value is "C:\CPC_Logon_Count.csv". Setting this parameter in commandline is optional.
+This value is where the CSV output should be written to, as well as the file name. The default value is "C:\Temp\CPC_Logon_Count.csv". Setting this parameter in commandline is optional.
 
+## Notes
 
+This script has been updated to allow reporting on users with multiple Cloud PCs. Thank you to Morten Pedholt - MVP for the fix and contribution

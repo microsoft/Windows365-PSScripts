@@ -1,4 +1,4 @@
-<#
+﻿<#
 .COPYRIGHT
 Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 See LICENSE in the project root for license information.
@@ -13,7 +13,7 @@ Param(
     [int]$offset = 30,
 
     [parameter(mandatory = $false, HelpMessage = "logpath")] 
-    [string]$logpath = "C:\Temp\CPC_Logon_Count.csv"
+    [string]$logpath = "C:\CPC_Logon_Count.csv"
 
 )
 
@@ -199,16 +199,24 @@ $string = "$($adjdate.Year)" + "-" + "$($adjdate.Month)" + "-" + "$($adjdate.Day
 #gets all cloudpcs
 $cloudPCs = Get-MgDeviceManagementVirtualEndpointCloudPC
 
+#gets all AAD Windows logons over time period 
+$String = "appdisplayname eq 'Windows Sign In' and createdDateTime gt $string"
+$Logons = get-AzureADAuditSignInLogs -Filter $String
+
+write-host ""
 write-host "Count of user logons to Cloud PCs over last $offset days"
-$OutputResult = @()
-foreach ($CloudPCUser in $cloudPCs){
+write-host ""
 
-#Get login information for user
-write-host "Getting login information for user $($CloudPCUser.UserPrincipalName)"
+#gets all users assigned to a cloud pc
+$users = @()
+foreach ($CloudPC in $CloudPCs) {
+    $users += $CloudPC.UserPrincipalName
+}
 
-$Logons = Get-AzureADAuditSignInLogs -Filter "startswith(userPrincipalName,'$($CloudPCUser.UserPrincipalName)') and appdisplayname eq 'Windows Sign In' and createdDateTime gt $string"
+#output user name, their assigned cloud PC name, and usage data
+foreach ($user in $users) {
 
-#declare array for CSV output
+    #declare array for CSV output
     $output = [PSCustomObject]@{
         "CPCUserPrincipalName" = ""
         "CPCManagedDeviceName" = ""
@@ -216,33 +224,35 @@ $Logons = Get-AzureADAuditSignInLogs -Filter "startswith(userPrincipalName,'$($C
         "Logons"               = ""
         "TotalDays"            = "$offset"
     }
-
-
+    
     #sets count variables to null so each user logon count is accurate
     $count = $null
     $LastLogon = $null
 
     #outputs user UPN
-    Write-Host $CloudPCUser.UserPrincipalName
-    $output.CPCUserPrincipalName = $CloudPCUser.UserPrincipalName
+    Write-Host $user
+    $output.CPCUserPrincipalName = $user
     
     #Finds the name of the cloudPC the user has
-    write-host $CloudPCUser.ManagedDeviceName
-    $output.CPCManagedDeviceName = $CloudPCUser.ManagedDeviceName
-       
-   
+    foreach ($CloudPC in $cloudPCs) {
+        if ($CloudPC.UserPrincipalName -eq $user) {
+            write-host $CloudPC.ManagedDeviceName
+            $output.CPCManagedDeviceName = $CloudPC.ManagedDeviceName
+        }
+    }
+    
+
     #Counts each web logon
     foreach ($Logon in $Logons) {
 
-        if (($Logon.UserPrincipalName -eq $CloudPCUser.UserPrincipalName) -and ($Logon.DeviceDetail.Displayname -like "CPC-*") -and ($Logon.DeviceDetail.DeviceID -eq $CloudPCUser.AadDeviceId)) {
+        if (($Logon.UserPrincipalName -eq $user) -and ($Logon.DeviceDetail.Displayname -like "CPC-*")) {
             $count = $count + 1
 
             if ($logon.CreatedDateTime -gt $LastLogon) { $LastLogon = $Logon.CreatedDateTime }    
-            
         }
     }
     if ($count -eq $null) { $count = 0 }
-
+    
     #outputs local client logon count
     write-host "Logon count is $count"
     $output.Logons = $count
@@ -256,15 +266,7 @@ $Logons = Get-AzureADAuditSignInLogs -Filter "startswith(userPrincipalName,'$($C
 
     write-host ""
 
-    $OutputResult += $output
-
-    Start-Sleep -Seconds 2
-
-    
+    #sends data to CSV file
+    $output | export-csv -Path $logpath -NoTypeInformation -append
 }
 
-if($logpath){
-    write-host "Exporting to Cloud PC Usage Report to CSV file"
-    $OutputResult | export-csv -Path $logpath -NoTypeInformation -force
-
-}
