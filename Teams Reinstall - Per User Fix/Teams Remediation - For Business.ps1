@@ -31,6 +31,16 @@ function MachineWideNeedUpdate {
     $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
     return [System.Version]$programValue.DisplayVersion -lt [System.Version]$targetVersion
 }
+# Function to check if ALLUSER exists under HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams, return true if need to update.
+function MachineWideNeedUpdate2 {
+    if (Test-Path HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams) {
+        $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {-not($_.ALLUSER)}
+        if ($programValue.Count -eq 0) {
+            return $true
+        }
+    }
+    return $false
+}
 # Function to uninstall current version of machine-wide installer.
 function UninstallMachinewide {  
     $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
