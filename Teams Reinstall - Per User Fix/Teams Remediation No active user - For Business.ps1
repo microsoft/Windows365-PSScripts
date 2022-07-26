@@ -9,6 +9,13 @@ Param(
     [parameter(mandatory = $false, HelpMessage = "expiration for schedtask")]
     [string]$DateOffset = 60
 )
+function InvokeUserdetect {
+    $explorerprocesses = @(Get-WmiObject -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
+    if ($explorerprocesses.Count -eq 0) {
+        return $true
+    }
+    return $false
+}
 # Function to dowanload machine-wide installer.
 function DownloadMsi {
     if ((test-path -Path $filePath) -eq $false) {
@@ -26,20 +33,9 @@ function DownloadMsi {
     }
 }
 # Function to check machine-wide version, return true if need to update.
-# TODO: is this good way to validate? ALLUSER/ALLUSERS in registry is better?
 function MachineWideNeedUpdate {
     $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
     return [System.Version]$programValue.DisplayVersion -lt [System.Version]$targetVersion
-}
-# Function to check if ALLUSER exists under HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams, return true if need to update.
-function MachineWideNeedUpdate2 {
-    if (Test-Path HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams) {
-        $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {-not($_.ALLUSER)}
-        if ($programValue.Count -eq 0) {
-            return $true
-        }
-    }
-    return $false
 }
 # Function to uninstall current version of machine-wide installer.
 function UninstallMachinewide {  
@@ -129,17 +125,40 @@ function CreateSchedXML([string] $SID) {
         Write-Host $_.Exception.Message
     }
 }
+function RemoveTeams([string] $path) {
+    $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
+    if ($process.ExitCode -eq 0)
+    {
+        remove-item -Path $path -Recurse -Force
+    }
+}
+function InvokeTeamslocation {
+    $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
+    $Users | ForEach-Object {
+        If ($_.Name -ne "Public") {
+            $localAppData = "$($ENV:SystemDrive)\Users\$($_.Name)\AppData\Local\Microsoft\Teams"
+            If (((Test-Path "$localAppData\update.exe") -eq $true) -and ((Test-Path "$localAppData\Current") -eq $true) -and ((Test-Path "$localAppData\.dead") -eq $false)) {
+                RemoveTeams -path $localAppData
+            }
+            $programData = "$($env:ProgramData)\$($_.Name)\Microsoft\Teams"
+            If (((Test-Path "$programData\update.exe") -eq $true) -and ((Test-Path "$programData\Current") -eq $true) -and ((Test-Path "$programData\.dead") -eq $false)) {
+                RemoveTeams -path $programData
+            }
+        }
+    }
+    $x86AppPath = "$($ENV:SystemDrive)\Program Files (x86)\Microsoft\Teams"
+    If (((Test-Path "$x86AppPath\update.exe") -eq $true) -and ((Test-Path "$x86AppPath\Current") -eq $true) -and ((Test-Path "$x86AppPath\.dead") -eq $false)) {
+        RemoveTeams -path $x86AppPath
+    }
+    $x64AppPath = "$($ENV:SystemDrive)\Program Files\Microsoft\Teams"
+    If (((Test-Path "$x64AppPath\update.exe") -eq $true) -and ((Test-Path "$x64AppPath\Current") -eq $true) -and ((Test-Path "$x64AppPath\.dead") -eq $false)) {
+        RemoveTeams -path $x64AppPath
+    }
+}
 # Function to create ps1 script used by schedtask.
 function CreateSchedPS1 {
     $scriptblock = {
         $dest = "$env:SystemDrive\CPCRemediation"
-        function RemoveTeams([string] $path) {
-            $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
-            if ($process.ExitCode -eq 0)
-            {
-                remove-item -Path $path -Recurse -Force
-            }
-        }
         function DeleteSchedtask {
             try {
                 Unregister-ScheduledTask -TaskPath '\' -TaskName "Teams-Remediation" -Confirm:$false -ErrorAction Stop
@@ -151,30 +170,7 @@ function CreateSchedPS1 {
         if (((test-path -Path "$dest\Teams-Remediation.xml") -eq $False) -and ((Test-Path -Path "$dest\Teams_windows_x64.msi") -eq $false)) {
             exit 0
         }
-        $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
-        $Users | ForEach-Object {
-            If ($_.Name -ne "Public") {
-                $localAppData = "$($ENV:SystemDrive)\Users\$($_.Name)\AppData\Local\Microsoft\Teams"
-                If (((Test-Path "$localAppData\update.exe") -eq $true) -and ((Test-Path "$localAppData\Current") -eq $true) -and ((Test-Path "$localAppData\.dead") -eq $false)) {
-                    RemoveTeams -path $localAppData
-                }
-                # TODO: check permission
-                $programData = "$($env:ProgramData)\$($_.Name)\Microsoft\Teams"
-                If (((Test-Path "$programData\update.exe") -eq $true) -and ((Test-Path "$programData\Current") -eq $true) -and ((Test-Path "$programData\.dead") -eq $false)) {
-                    RemoveTeams -path $programData
-                }
-            }
-        }
-        # TODO: check permission
-        $x86AppPath = "$($ENV:SystemDrive)\Program Files (x86)\Microsoft\Teams"
-        If (((Test-Path "$x86AppPath\update.exe") -eq $true) -and ((Test-Path "$x86AppPath\Current") -eq $true) -and ((Test-Path "$x86AppPath\.dead") -eq $false)) {
-            RemoveTeams -path $x86AppPath
-        }
-        # TODO: check permission
-        $x64AppPath = "$($ENV:SystemDrive)\Program Files\Microsoft\Teams"
-        If (((Test-Path "$x64AppPath\update.exe") -eq $true) -and ((Test-Path "$x64AppPath\Current") -eq $true) -and ((Test-Path "$x64AppPath\.dead") -eq $false)) {
-            RemoveTeams -path $x64AppPath
-        }
+        
         try {
             $value = Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop
         }
@@ -191,33 +187,39 @@ function CreateSchedPS1 {
         exit 1
     }
 }
+if ((InvokeUserdetect) -eq $true) {
 # Only apply remediation if machine-wide version is lower than target one.
-if ((MachineWideNeedUpdate) -eq $true) {
-	# Create CPCRemediation folder under system drive if not exists.
-	if ((test-path -Path $dest) -eq $false) {
-		$createFolder = New-Item $dest -ItemType Directory
-	}
-    DownloadMsi
-    UninstallMachinewide
-    msiexec.exe /I $filePath ALLUSERS=1
-    CreateSchedPS1
-    $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
-    $Users | ForEach-Object {
-        If ($_.Name -ne "Public") {
-            $sid = GetSid -CurrentUser $_.Name
-            if ($sid -ne "") {
-                CreateSchedXML -SID $sid
-                try {
-                    Start-Process schtasks.exe -Args @("/create", "/xml", "$dest\Teams-Remediation.xml", "/tn", "Teams-Remediation") -wait -ErrorAction Stop
-                }
-                catch {
-                    exit 1
+    if ((MachineWideNeedUpdate) -eq $true) {
+        # Create CPCRemediation folder under system drive if not exists.
+        if ((test-path -Path $dest) -eq $false) {
+            $createFolder = New-Item $dest -ItemType Directory
+        }
+        DownloadMsi
+        UninstallMachinewide
+        InvokeTeamslocation
+        msiexec.exe /I $filePath ALLUSERS=1
+        CreateSchedPS1
+        $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
+        $Users | ForEach-Object {
+            If ($_.Name -ne "Public") {
+                $sid = GetSid -CurrentUser $_.Name
+                if ($sid -ne "") {
+                    CreateSchedXML -SID $sid
+                    try {
+                        Start-Process schtasks.exe -Args @("/create", "/xml", "$dest\Teams-Remediation.xml", "/tn", "Teams-Remediation") -wait -ErrorAction Stop
+                    }
+                    catch {
+                        exit 1
+                    }
                 }
             }
         }
+        Write-Host "CloudPC is applied teams remediation."
     }
-    Write-Host "CloudPC is applied teams remediation."
+    else {
+        Write-Host "CloudPC uses latest machine-wide installer."
+    }
 }
 else {
-    Write-Host "CloudPC uses latest machine-wide installer."
+    Write-Host "Detected user, exiting."
 }
