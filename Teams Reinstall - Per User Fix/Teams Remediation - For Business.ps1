@@ -9,6 +9,26 @@ Param(
     [parameter(mandatory = $false, HelpMessage = "expiration for schedtask")]
     [string]$DateOffset = 60
 )
+# Function to query the user state and convert to variable
+function GetUserstate {
+    (((quser) -replace '^>', '') -replace '\s{2,}', ',').Trim() | ForEach-Object {
+        if ($_.Split(',').Count -eq 5) {
+            Write-Output ($_ -replace '(^[^,]+)', '$1,')
+        }
+        else {
+            Write-Output $_
+        }
+    } | ConvertFrom-Csv
+}
+# No active user return false.
+function InvokeUserdetect {
+    $explorerprocesses = @(Get-WmiObject -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
+    $session = GetUserstate
+    if (($explorerprocesses.Count -eq 0) -or ($session.state -eq "disc")) {
+        return $false
+    }
+    return $true
+}
 # Function to dowanload machine-wide installer.
 function DownloadMsi {
     if ((test-path -Path $filePath) -eq $false) {
@@ -25,14 +45,8 @@ function DownloadMsi {
         }
     }
 }
-# Function to check machine-wide version, return true if need to update.
-# TODO: is this good way to validate? ALLUSER/ALLUSERS in registry is better?
+# Return true when need update.
 function MachineWideNeedUpdate {
-    $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
-    return [System.Version]$programValue.DisplayVersion -lt [System.Version]$targetVersion
-}
-# Function to check if ALLUSER exists under HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams, return true if need to update.
-function MachineWideNeedUpdate2 {
     if (Test-Path HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams) {
         $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {-not($_.ALLUSER)}
         if ($programValue.Count -eq 0) {
@@ -64,7 +78,7 @@ function GetSid([string] $CurrentUser) {
             return $userkey.PSChildName
         }
         else {
-            return ""
+            return $null
         }
     }
 }
@@ -74,17 +88,17 @@ function CreateSchedXML([string] $SID) {
     $thedate = $adjdate | get-date -format s
     $TaskXML = @"
 <?xml version="1.0" encoding="UTF-16"?>
-
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Windows365</Author>
     <URI>\Teams-Remediation</URI>
   </RegistrationInfo>
   <Triggers>
-    <LogonTrigger>
+    <SessionStateChangeTrigger>
       <EndBoundary>$thedate</EndBoundary>
       <Enabled>true</Enabled>
-    </LogonTrigger>
+      <StateChange>RemoteConnect</StateChange>
+    </SessionStateChangeTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
@@ -129,17 +143,40 @@ function CreateSchedXML([string] $SID) {
         Write-Host $_.Exception.Message
     }
 }
+function RemoveTeams([string] $path) {
+    $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
+    if ($process.ExitCode -eq 0)
+    {
+        remove-item -Path $path -Recurse -Force
+    }
+}
+function InvokeTeamslocation {
+    $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
+    $Users | ForEach-Object {
+        If ($_.Name -ne "Public") {
+            $localAppData = "$($ENV:SystemDrive)\Users\$($_.Name)\AppData\Local\Microsoft\Teams"
+            If (((Test-Path "$localAppData\update.exe") -eq $true) -and ((Test-Path "$localAppData\Current") -eq $true) -and ((Test-Path "$localAppData\.dead") -eq $false)) {
+                RemoveTeams -path $localAppData
+            }
+            $programData = "$($env:ProgramData)\$($_.Name)\Microsoft\Teams"
+            If (((Test-Path "$programData\update.exe") -eq $true) -and ((Test-Path "$programData\Current") -eq $true) -and ((Test-Path "$programData\.dead") -eq $false)) {
+                RemoveTeams -path $programData
+            }
+        }
+    }
+    $x86AppPath = "$($ENV:SystemDrive)\Program Files (x86)\Microsoft\Teams"
+    If (((Test-Path "$x86AppPath\update.exe") -eq $true) -and ((Test-Path "$x86AppPath\Current") -eq $true) -and ((Test-Path "$x86AppPath\.dead") -eq $false)) {
+        RemoveTeams -path $x86AppPath
+    }
+    $x64AppPath = "$($ENV:SystemDrive)\Program Files\Microsoft\Teams"
+    If (((Test-Path "$x64AppPath\update.exe") -eq $true) -and ((Test-Path "$x64AppPath\Current") -eq $true) -and ((Test-Path "$x64AppPath\.dead") -eq $false)) {
+        RemoveTeams -path $x64AppPath
+    }
+}
 # Function to create ps1 script used by schedtask.
 function CreateSchedPS1 {
     $scriptblock = {
         $dest = "$env:SystemDrive\CPCRemediation"
-        function RemoveTeams([string] $path) {
-            $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
-            if ($process.ExitCode -eq 0)
-            {
-                remove-item -Path $path -Recurse -Force
-            }
-        }
         function DeleteSchedtask {
             try {
                 Unregister-ScheduledTask -TaskPath '\' -TaskName "Teams-Remediation" -Confirm:$false -ErrorAction Stop
@@ -151,32 +188,8 @@ function CreateSchedPS1 {
         if (((test-path -Path "$dest\Teams-Remediation.xml") -eq $False) -and ((Test-Path -Path "$dest\Teams_windows_x64.msi") -eq $false)) {
             exit 0
         }
-        $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
-        $Users | ForEach-Object {
-            If ($_.Name -ne "Public") {
-                $localAppData = "$($ENV:SystemDrive)\Users\$($_.Name)\AppData\Local\Microsoft\Teams"
-                If (((Test-Path "$localAppData\update.exe") -eq $true) -and ((Test-Path "$localAppData\Current") -eq $true) -and ((Test-Path "$localAppData\.dead") -eq $false)) {
-                    RemoveTeams -path $localAppData
-                }
-                # TODO: check permission
-                $programData = "$($env:ProgramData)\$($_.Name)\Microsoft\Teams"
-                If (((Test-Path "$programData\update.exe") -eq $true) -and ((Test-Path "$programData\Current") -eq $true) -and ((Test-Path "$programData\.dead") -eq $false)) {
-                    RemoveTeams -path $programData
-                }
-            }
-        }
-        # TODO: check permission
-        $x86AppPath = "$($ENV:SystemDrive)\Program Files (x86)\Microsoft\Teams"
-        If (((Test-Path "$x86AppPath\update.exe") -eq $true) -and ((Test-Path "$x86AppPath\Current") -eq $true) -and ((Test-Path "$x86AppPath\.dead") -eq $false)) {
-            RemoveTeams -path $x86AppPath
-        }
-        # TODO: check permission
-        $x64AppPath = "$($ENV:SystemDrive)\Program Files\Microsoft\Teams"
-        If (((Test-Path "$x64AppPath\update.exe") -eq $true) -and ((Test-Path "$x64AppPath\Current") -eq $true) -and ((Test-Path "$x64AppPath\.dead") -eq $false)) {
-            RemoveTeams -path $x64AppPath
-        }
         try {
-            $value = Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop
+            Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
         }
         finally {
             Remove-Item -Path $dest -Recurse -Force -ErrorAction Stop
@@ -191,33 +204,33 @@ function CreateSchedPS1 {
         exit 1
     }
 }
-# Only apply remediation if machine-wide version is lower than target one.
-if ((MachineWideNeedUpdate) -eq $true) {
-	# Create CPCRemediation folder under system drive if not exists.
-	if ((test-path -Path $dest) -eq $false) {
-		$createFolder = New-Item $dest -ItemType Directory
-	}
+$userIsActive = InvokeUserdetect
+$teamsNeedUpdate = MachineWideNeedUpdate
+if ($userIsActive -eq $true -or $teamsNeedUpdate -eq $true) {
+    Write-Host "User is active: $userIsActive, Teams need update: $teamsNeedUpdate"
+}
+else {
+    if ((test-path -Path $dest) -eq $false) {
+        New-Item $dest -ItemType Directory > $null
+    }
     DownloadMsi
     UninstallMachinewide
+    InvokeTeamslocation
     msiexec.exe /I $filePath ALLUSERS=1
     CreateSchedPS1
     $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
     $Users | ForEach-Object {
         If ($_.Name -ne "Public") {
             $sid = GetSid -CurrentUser $_.Name
-            if ($sid -ne "") {
+            if ($sid -ne $null) {
                 CreateSchedXML -SID $sid
                 try {
                     Start-Process schtasks.exe -Args @("/create", "/xml", "$dest\Teams-Remediation.xml", "/tn", "Teams-Remediation") -wait -ErrorAction Stop
                 }
-                catch {
-                    exit 1
+                finally {
+                    "Apply teams remediation."
                 }
             }
         }
     }
-    Write-Host "CloudPC is applied teams remediation."
-}
-else {
-    Write-Host "CloudPC uses latest machine-wide installer."
 }
