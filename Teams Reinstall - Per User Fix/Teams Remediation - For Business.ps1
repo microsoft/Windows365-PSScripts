@@ -1,14 +1,47 @@
-# Teams Remediation script.
+<#
+.COPYRIGHT
+Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
+See LICENSE in the project root for license information.
+#>
+
+#version v1.0
+
 Param(
+    [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
+    [string]$logpath = "$env:SystemDrive\CPCRemediation\Teams-Remediation.log",
     [parameter(mandatory = $false, HelpMessage = "destination of files")]
     [string]$dest = "$env:SystemDrive\CPCRemediation",
     [parameter(mandatory = $false, HelpMessage = "destination of machine-wide msi")]
     [string]$filePath = "$env:SystemDrive\CPCRemediation\Teams_windows_x64.msi",
     [parameter(mandatory = $false, HelpMessage = "machine-wide installer version")]
-    [string]$targetVersion = "1.5.00.11865",
+    [string]$targetVersion = "1.5.00.19563",
     [parameter(mandatory = $false, HelpMessage = "expiration for schedtask")]
-    [string]$DateOffset = 60
+    [int]$DateOffset = 60
 )
+#function to handle logging
+function UpdateLog {
+    Param(
+        [Parameter(
+            Mandatory = $true,
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true,
+            Position = 0
+        )]
+        [string]$Data,
+        [validateset('Information', 'Warning', 'Error', 'Comment')]
+        [string]$Class = "Information",
+        [validateset('Console', 'File', 'Both')]
+        [string]$Output = "File"
+    )
+    $date = get-date -UFormat "%m/%d/%y %r"
+    $String = $Class + " " + $date + " " + $data
+    if ($Output -eq "Console") { Write-Output $string | out-host }
+    if ($Output -eq "file") { Write-Output $String | out-file -FilePath $logpath -Append }
+    if ($Output -eq "Both") {
+        Write-Output $string | out-host
+        Write-Output $String | out-file -FilePath $logpath -Append
+    }
+}
 # Function to query the user state and convert to variable
 function GetUserstate {
     (((quser) -replace '^>', '') -replace '\s{2,}', ',').Trim() | ForEach-Object {
@@ -20,28 +53,48 @@ function GetUserstate {
         }
     } | ConvertFrom-Csv
 }
-# No active user return false.
+# No active user return 0, user disc return 1, else return 2.
 function InvokeUserdetect {
+    UpdateLog -data "Detecting user state." -Output Console
     $explorerprocesses = @(Get-WmiObject -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
-    $session = GetUserstate
-    if (($explorerprocesses.Count -eq 0) -or ($session.state -eq "disc")) {
-        return $false
+    if ($explorerprocesses.Count -eq 0) {
+        UpdateLog -data "No user logs on yet." -Output Console
+        return 0
     }
-    return $true
+    else {
+        $session = GetUserstate
+        if ($session.state -eq "disc") {
+            UpdateLog -data "User disconnected." -Output Console
+            return 1
+        }
+    }
+    return 2
 }
 # Function to dowanload machine-wide installer.
 function DownloadMsi {
+    UpdateLog -data "Starting machine-wide installer downloading." -Output Both
     if ((test-path -Path $filePath) -eq $false) {
         $url = "https://statics.teams.cdn.office.net/production-windows-x64/$targetVersion/Teams_windows_x64.msi"
         $bits = Get-Service -Name "BITS"
         if (($bits.StartType -ne 'Disabled') -or ($bits.Status -eq 'Running'))
         {
-            Start-BitsTransfer -TransferType Download -Source $url -Destination $filePath
+            try {
+                Start-BitsTransfer -TransferType Download -Source $url -Destination $filePath
+                UpdateLog -data "machine-wide installer downloaded." -Output Both
+            }
+            catch {
+                UpdateLog -data "Failed to download machine-wide installer." -Class Error -Output Both
+            }
         }
-        else 
-        {
+        else {
             $ProgressPreference = 'SilentlyContinue'
-            Invoke-WebRequest -Uri $url -OutFile $filePath
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $filePath
+                UpdateLog -data "machine-wide installer downloaded." -Output Both
+            }
+            catch {
+                UpdateLog -data "Failed to download machine-wide installer." -Class Error -Output Both
+            }
         }
     }
 }
@@ -56,28 +109,38 @@ function MachineWideNeedUpdate {
     return $false
 }
 # Function to uninstall current version of machine-wide installer.
-function UninstallMachinewide {  
+function UninstallMachinewide {
+    UpdateLog -data "Starting machine-wide installer uninstallation." -Output Both
     $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
     $Uninstall = $programValue.UninstallString
     If ($null -eq $Uninstall) {
+        UpdateLog -data "machine-wide installer not found." -Class Warning -Output Both
         return
     }
     $guid = $Uninstall.replace("MsiExec.exe /I", "")
+    UpdateLog -data "Uninstalling machine-wide installer." -Output Both
     $process = start-process -FilePath C:\windows\System32\msiexec.exe -Args @('/X', "`"$guid`"", '/qb-') -Wait -PassThru
     if ($process.ExitCode -ne 0) {
+        UpdateLog -data "Failed to uninstall machine-wide installer." -Class Error -Output Both
         exit 1
+    }
+    else {
+        UpdateLog -data "Uninstalled machine-wide installer." -Output Both
     }
 }
 # Function to get SID of VM user.
 function GetSid([string] $CurrentUser) {
+    UpdateLog -data "Searching user SID." -Output Both
     $userkeys = Get-ChildItem -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
     foreach ($userkey in $userkeys) {
         $tempreg = $userkey.name.Replace("HKEY_LOCAL_MACHINE", "HKLM:")
         $tempresult = get-itemproperty -Path $tempreg
         if ($tempresult.profileimagepath -like "*$CurrentUser*") {
+            UpdateLog -data "Found user SID." -Output Both
             return $userkey.PSChildName
         }
         else {
+            UpdateLog -data "User SID not found." -Class Error -Output Both
             return $null
         }
     }
@@ -99,6 +162,10 @@ function CreateSchedXML([string] $SID) {
       <Enabled>true</Enabled>
       <StateChange>RemoteConnect</StateChange>
     </SessionStateChangeTrigger>
+    <LogonTrigger>
+      <EndBoundary>$thedate</EndBoundary>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
@@ -140,14 +207,19 @@ function CreateSchedXML([string] $SID) {
         $TaskXML | Out-File "$dest\Teams-Remediation.xml" -ErrorAction Stop
     }
     catch {
-        Write-Host $_.Exception.Message
+        UpdateLog -data $_.Exception.Message -Class Error -Output Both
+        Exit 1
     }
 }
 function RemoveTeams([string] $path) {
     $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
     if ($process.ExitCode -eq 0)
     {
+        UpdateLog -data "Uninstalled Teams." -Output Both
         remove-item -Path $path -Recurse -Force
+    }
+    else {
+        UpdateLog -data "Failed to uninstall Teams." -Class Error -Output Both
     }
 }
 function InvokeTeamslocation {
@@ -174,9 +246,12 @@ function InvokeTeamslocation {
     }
 }
 # Function to create ps1 script used by schedtask.
-function CreateSchedPS1 {
-    $scriptblock = {
+function CreateSchedPS1([int] $userState) {
+    $scriptblockFunc = {
         $dest = "$env:SystemDrive\CPCRemediation"
+        if (((test-path -Path "$dest\Teams-Remediation.xml") -eq $false) -and ((Test-Path -Path "$dest\Teams_windows_x64.msi") -eq $false)) {
+            exit 0
+        }
         function DeleteSchedtask {
             try {
                 Unregister-ScheduledTask -TaskPath '\' -TaskName "Teams-Remediation" -Confirm:$false -ErrorAction Stop
@@ -185,50 +260,75 @@ function CreateSchedPS1 {
                 exit 1
             }
         }
-        if (((test-path -Path "$dest\Teams-Remediation.xml") -eq $False) -and ((Test-Path -Path "$dest\Teams_windows_x64.msi") -eq $false)) {
-            exit 0
+        function BrokenRegistryProperty {
+            $value = Get-Item -Path HKCU:\Software\Microsoft\Office\Teams -ErrorAction SilentlyContinue
+            if ($value.Count -ne 0) {
+                if ($value.Property -eq "PreventInstallationFromMsi") {
+                    return $true
+                }
+            }
+            return $false
         }
-        try {
+    }
+    $scriptblockInstall0 = {
+        if (BrokenRegistryProperty -eq $true) {
+            Remove-ItemProperty -Path HKCU:\Software\Microsoft\Office\Teams -Name "PreventInstallationFromMsi" -ErrorAction SilentlyContinue
             Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
         }
-        finally {
-            Remove-Item -Path $dest -Recurse -Force -ErrorAction Stop
-        }
+    }
+    $scriptblockInstall1 = {
+        Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
+    }
+    if ($userState -eq 0) {
+        $scriptblockInstall = $scriptblockInstall0
+    } else {
+        $scriptblockInstall = $scriptblockInstall1
+    }
+    $scriptblockCleanup = {
+        Remove-Item -Path $dest -Recurse -Force -ErrorAction Stop
         DeleteSchedtask
     }
     try{
-        $scriptblock | Out-String -Width 4096 | Out-File -FilePath "$dest\Teams-Remediation.ps1" -Force -ErrorAction Stop
+        $scriptblockFunc.ToString() + $scriptblockInstall.ToString() + $scriptblockCleanup.ToString() | Out-String -Width 4096 | Out-File -FilePath "$dest\Teams-Remediation.ps1" -Force -ErrorAction Stop
+        UpdateLog -data "Created script executed by schedtask." -Output Both
     }
     catch
     {
+        UpdateLog -data $_.Exception.Message -Class Error -Output Both
         exit 1
     }
 }
-$userIsActive = InvokeUserdetect
+$userState = InvokeUserdetect
 $teamsNeedUpdate = MachineWideNeedUpdate
-if ($userIsActive -eq $true -or $teamsNeedUpdate -eq $true) {
-    Write-Host "User is active: $userIsActive, Teams need update: $teamsNeedUpdate"
+if ($teamsNeedUpdate -eq $false) {
+    UpdateLog -data "Teams is fine." -Output Console
 }
 else {
-    if ((test-path -Path $dest) -eq $false) {
-        New-Item $dest -ItemType Directory > $null
+    if ($userState -eq 2) {
+        UpdateLog -data "User is active, exiting." -Output Console
     }
-    DownloadMsi
-    UninstallMachinewide
-    InvokeTeamslocation
-    msiexec.exe /I $filePath ALLUSERS=1
-    CreateSchedPS1
-    $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
-    $Users | ForEach-Object {
-        If ($_.Name -ne "Public") {
-            $sid = GetSid -CurrentUser $_.Name
-            if ($sid -ne $null) {
-                CreateSchedXML -SID $sid
-                try {
-                    Start-Process schtasks.exe -Args @("/create", "/xml", "$dest\Teams-Remediation.xml", "/tn", "Teams-Remediation") -wait -ErrorAction Stop
-                }
-                finally {
-                    "Apply teams remediation."
+    else {
+        if ((test-path -Path $dest) -eq $false) {
+            New-Item $dest -ItemType Directory > $null
+        }
+        DownloadMsi
+        UninstallMachinewide
+        InvokeTeamslocation
+        msiexec.exe /I $filePath ALLUSERS=1
+        CreateSchedPS1 -userState $userState
+        $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
+        $Users | ForEach-Object {
+            If ($_.Name -ne "Public") {
+                $sid = GetSid -CurrentUser $_.Name
+                if ($sid -ne $null) {
+                    CreateSchedXML -SID $sid
+                    try {
+                        Start-Process schtasks.exe -Args @("/create", "/xml", "$dest\Teams-Remediation.xml", "/tn", "Teams-Remediation") -wait -ErrorAction Stop
+                        UpdateLog -Data "schedtask has been set." -Output Both
+                    }
+                    catch {
+                        UpdateLog -Data "Couldn't create the scheduled task. Team client should reinstall after CPC is rebooted." -Class Error -Output Both
+                    }
                 }
             }
         }
