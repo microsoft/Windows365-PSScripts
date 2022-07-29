@@ -44,14 +44,19 @@ function UpdateLog {
 }
 # Function to query the user state and convert to variable
 function GetUserstate {
-    (((quser) -replace '^>', '') -replace '\s{2,}', ',').Trim() | ForEach-Object {
-        if ($_.Split(',').Count -eq 5) {
-            Write-Output ($_ -replace '(^[^,]+)', '$1,')
-        }
-        else {
-            Write-Output $_
-        }
-    } | ConvertFrom-Csv
+    try {
+        (((quser) -replace '^>', '') -replace '\s{2,}', ',').Trim() | ForEach-Object {
+            if ($_.Split(',').Count -eq 5) {
+                Write-Output ($_ -replace '(^[^,]+)', '$1,')
+            }
+            else {
+                Write-Output $_
+            }
+        } | ConvertFrom-Csv
+    }
+    catch {
+        UpdateLog -Data "quser not works." -Class Warning -Output Both
+    }
 }
 # No active user return 0, user disc return 1, else return 2.
 function InvokeUserdetect {
