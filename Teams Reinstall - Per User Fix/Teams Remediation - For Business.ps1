@@ -277,7 +277,6 @@ function CreateSchedPS1([int] $userState) {
     }
     $scriptblockInstall0 = {
         if (BrokenRegistryProperty -eq $true) {
-            Remove-ItemProperty -Path HKCU:\Software\Microsoft\Office\Teams -Name "PreventInstallationFromMsi" -ErrorAction SilentlyContinue
             Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
         }
     }
