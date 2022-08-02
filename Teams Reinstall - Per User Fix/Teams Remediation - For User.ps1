@@ -1,3 +1,11 @@
+<#
+.COPYRIGHT
+Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
+See LICENSE in the project root for license information.
+#>
+
+#version v1.0
+
 # Teams Remediation script for user. Aims to reinstall Teams client.
 # This script is required to be executed via Powershell Run as Administrator.
 # Initial constants.
