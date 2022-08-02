@@ -61,6 +61,16 @@ function Log {
         return $jsonString
     }
 }
+# Method to detect whether schedTask exists.
+function DetectSchedTask {
+    $value = Get-ScheduledTask -TaskName Teams-Remediation -ErrorAction SilentlyContinue
+    if ($null -eq $value.TaskName) {
+        return $false
+    }
+    else {
+        return $true
+    }
+}
 # Function to query the user state and convert to variable.
 function GetUserstate {
     try {
@@ -347,6 +357,13 @@ function CreateSchedPS1([int] $userState) {
         Log -Data $_.Exception.Message -Class Error -ErrCode SetupSchedTaskFailed
         exit 1
     }
+}
+# Check if schedTask exists.
+$schedTaskExists = DetectSchedTask
+if ($schedTaskExists -eq $true) {
+    $outputValues += "Remediation has been applied."
+    Log -Data $outputValues -Class Succeeded
+    exit 0
 }
 # Check if Teams is broken.
 $teamsNeedUpdate = MachineWideNeedUpdate
