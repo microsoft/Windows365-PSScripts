@@ -4,6 +4,12 @@ This example script set is intended for use with Proactive Remediation. This pac
 ## The Problem it Solves
 The functionality around installing Teams Machine Wide Installer for VDI had a slight change that impacted the ability for installed Teams clients to auto-update or have the user run an update check. This example solution uninstalls the Teams client, downloads and installs Teams Machine Wide Installer with the proper arguments, removes a Registry Key that can prevent the Teams client from installing, and then sets up a scheduled task to allow the Teams client to be reinstalled without a reboot or logoff.
 
+## Settings for Proactive Remediation
+When importing the scripts into Proactive Remediation, the follow options should be selected:
+- Run this script using the logged-on credentials - No
+- Enforce script signature check - No
+- Run script in 64-bit PowerShell - Yes
+
 ## Detection Script
 The detection script checks three paths for the presence of the Teams client. If the Teams client is found in either Program Files or Program Files (x86), or isn't detected at all the script will return non-compliant. If the Teams client is found in the users' Appdata folder the script returns compliant.
 

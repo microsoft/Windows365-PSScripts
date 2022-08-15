@@ -438,7 +438,7 @@ function create-SchedPS1 {
 
         Remove-Item -Path c:\windows\temp\InstallTeams-Remediation.xml -Force -ErrorAction Continue
         Remove-Item -Path C:\windows\Temp\TeamsMWInstaller.msi -Force -ErrorAction Continue
-        remove-temm -path c:\windows\temp\teamsinstall.ps1 -force -ErrorAction Continue
+        remove-item -path c:\windows\temp\teamsinstall.ps1 -force -ErrorAction Continue
 
     }
     try{
