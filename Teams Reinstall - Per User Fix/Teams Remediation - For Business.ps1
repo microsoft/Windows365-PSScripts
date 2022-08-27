@@ -4,22 +4,22 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-#version v1.0
+#version v1.1
 
 # Teams Remediation script. Aims to reinstall Teams client.
 Param(
     [parameter(mandatory = $false, HelpMessage = "Incoming user SID")] 
-    [string]$UserSid
+    [string]$UserSid=$null
 )
 # Initial constants.
 $remediationFilesPath = "$env:SystemDrive\CPCRemediation"
 $msiFilePath = "$remediationFilesPath\Teams_windows_x64.msi"
 $installerVersion = "1.5.00.19563"
-$schedTaskRetiredDay = 60
+$schedTaskRetentionDays = 60
 # Define output class.
 Add-Type @"
     using System;
-    public class CustomLog{
+    public class Result{
         public bool Succceded;
         public string UserStatus;
         public string ErrorCode;
@@ -29,15 +29,12 @@ Add-Type @"
 "@
 # Define user states.
 enum UserStates {
-    NoUserLogged
-    UserActive
-    UserDisc
+    NotLogged
+    Active
+    Disconnected
 }
-[UserStates]$noUserLogged = [UserStates]::NoUserLogged
-[UserStates]$userActive = [UserStates]::UserActive
-[UserStates]$userDisc = [UserStates]::UserDisc
 #function to handle logging.
-$log = New-Object CustomLog
+$log = New-Object Result
 $outputValues = $null
 $errorValues = $null
 function Log {
@@ -51,7 +48,7 @@ function Log {
         [string]$Data,
         [validateset('Succeeded', 'Error')]
         [string]$Class = "Succeeded",
-        [validateset('QuserNotWork', 'DownloadMsiFailed', 'UninstallMachinewideFailed', 'UninstallTeamsFailed', 'InstallMachinewideFailed', 'SetupSchedTaskFailed')]
+        [validateset('QuserNotWork', 'FailedToGetSID', 'DownloadMsiFailed', 'UninstallMachinewideFailed', 'UninstallTeamsFailed', 'InstallMachinewideFailed', 'SetupSchedTaskFailed')]
         [string]$ErrCode
     )
     if ($Class -eq "Succeeded") {
@@ -70,7 +67,7 @@ function Log {
     }
 }
 # Method to detect whether schedTask exists.
-function DetectSchedTask {
+function SchedTaskDetected {
     $value = Get-ScheduledTask -TaskName Teams-Remediation -ErrorAction SilentlyContinue
     if ($null -eq $value.TaskName) {
         return $false
@@ -80,7 +77,7 @@ function DetectSchedTask {
     }
 }
 # Function to query the user state and convert to variable.
-function GetUserstate {
+function GetUserSession {
     try {
         (((quser) -replace '^>', '') -replace '\s{2,}', ',').Trim() | ForEach-Object {
             if ($_.Split(',').Count -eq 5) {
@@ -97,22 +94,22 @@ function GetUserstate {
     }
 }
 # Return enum according to user state.
-function InvokeUserdetect {
+function GetUserState {
     # explorer process can be considered as user logs on or not.
     $explorerprocesses = @(Get-WmiObject -Query "Select * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
     if ($explorerprocesses.Count -eq 0) {
-        return $noUserLogged
+        return [UserStates]::NotLogged
     }
     else {
         # if there is explorer process, user can be active or disc.
         # quser result can be used to distinguish the exact value. 
-        $session = GetUserstate
+        $session = GetUserSession
         # if quser doesn't work on the target CPC, we will consider as user active.
         if ($session.state -eq "disc") {
-            return $userDisc
+            return [UserStates]::Disconnected
         }
     }
-    return $userActive
+    return [UserStates]::Active
 }
 # Function to dowanload machine-wide installer.
 function DownloadMsi {
@@ -142,18 +139,68 @@ function DownloadMsi {
         }
     }
 }
+# Function to check Teams installed under a specific path.
+function TeamsExists([string] $path) {
+    If (((Test-Path "$path\update.exe") -eq $true) -and ((Test-Path "$path\Current") -eq $true) -and ((Test-Path "$path\.dead") -eq $false)) {
+        return $true
+    }
+    return $false
+}
+# Return true if Teams MachineWide Installer exists.
+function MachineWideExists {
+    $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |  Where-Object {$_.DisplayName -like "*Teams Machine-Wide Installer*"}
+    if ($null -ne $programValue) {
+        return $true
+    }
+    return $false
+}
 # Return true when need update.
 function MachineWideNeedUpdate {
     # there's broken property ALLUSER undr HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams.
     if (Test-Path HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams) {
-        # try to find the registry key's property all not equal to ALLUSER.
-        $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {-not($_.ALLUSER)}
-        # if found ALLUSER, the value is empty.
-        if ($programValue.Count -eq 0) {
+        # try to find the registry key's property equal to ALLUSER.
+        $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {$_.ALLUSER}
+        # if found ALLUSER, return true.
+        if ($null -ne $programValue) {
             return $true
         }
     }
-    return $false
+    # check if Teams installed under some false paths.
+    $Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
+    $Users | ForEach-Object {
+        If ($_.Name -ne "Public") {
+            $programData = "$($env:ProgramData)\$($_.Name)\Microsoft\Teams"
+            if ((TeamsExists -path $programData)) {
+                return $true
+            }
+        }
+    }
+    $x86AppPath = "$($ENV:SystemDrive)\Program Files (x86)\Microsoft\Teams"
+    if ((TeamsExists -path $x86AppPath)) {
+        return $true
+    }
+    $x64AppPath = "$($ENV:SystemDrive)\Program Files\Microsoft\Teams"
+    if ((TeamsExists -path $x64AppPath)) {
+        return $true
+    }
+}
+function RemoveAllUserRegistryKey {
+    if (Test-Path HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams) {
+        $programValue = Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Teams |  Where-Object {$_.ALLUSER}
+        if ($null -ne $programValue) {
+            $registryPath = "HKLM:\Software\WOW6432Node\Microsoft\Teams"
+            Remove-Item -Path $registryPath
+        }
+    }
+}
+function RemoveFalseShortCut {
+    $shortCutPath = "$($env:ProgramData)\Microsoft\Windows\Start Menu\Programs\Microsoft Teams.lnk"
+    if (Test-Path $shortCutPath) {
+        Remove-Item $shortCutPath
+    }
+}
+function KillTeams {
+    if ((get-process | Where-Object ProcessName -eq "Teams").Count -gt 0) { kill -name teams -force }
 }
 # Function to uninstall current version of machine-wide installer.
 function UninstallMachinewide {
@@ -192,7 +239,7 @@ function GetSid([string] $CurrentUser) {
 # Schedtask will be trigger when user from disconnected to active,
 # or be triggered when user logs on after the CPC rebooted.
 function CreateSchedXML([string] $SID) {
-    $adjdate = (get-date).AddDays($schedTaskRetiredDay)
+    $adjdate = (get-date).AddDays($schedTaskRetentionDays)
     $thedate = $adjdate | get-date -format s
     $TaskXML = @"
 <?xml version="1.0" encoding="UTF-16"?>
@@ -260,11 +307,8 @@ function CreateSchedXML([string] $SID) {
 function RemoveTeams([string] $path) {
     If (((Test-Path "$path\update.exe") -eq $true) -and ((Test-Path "$path\Current") -eq $true) -and ((Test-Path "$path\.dead") -eq $false)) {
         $process = Start-Process -FilePath "$path\update.exe" -Args @('--uninstall', '/s') -Wait -PassThru
-        if ($process.ExitCode -eq 0)
+        if ($process.ExitCode -ne 0)
         {
-            remove-item -Path $path -Recurse -Force
-        }
-        else {
             Log -Data "Failed to uninstall Teams." -Class Error -ErrCode UninstallTeamsFailed
             exit 1
         }
@@ -333,23 +377,23 @@ function CreateSchedPS1([int] $userState) {
             return $false
         }
     }
-    # This script block is only for CPC state was no user logs on yet (rebooted).
-    $scriptblockInstallForUserNotLogged = {
-        if (BrokenRegistryProperty -eq $true) {
-            Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
-        }
-    }
     # This script block is only for CPC state was disconnected.
     # Because if CPC was not rebooted, machine-wide installer won't work.
     # We need to trigger Teams client installation manually.
     $scriptblockInstallForDiscUser = {
-        Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
+        if ((BrokenRegistryProperty) -eq $false) {
+            Start-Process -FilePath "C:\Program Files (x86)\Teams Installer\Teams.exe" -PassThru -ErrorAction Stop > $null
+        }
+        else {
+            Write-Output "Do nothing."
+        }
     }
     # We check user's state to select which script block above.
-    if ($userState -eq $noUserLogged) {
-        $scriptblockInstall = $scriptblockInstallForUserNotLogged
-    } else {
+    if ($userState -eq [UserStates]::Disconnected) {
         $scriptblockInstall = $scriptblockInstallForDiscUser
+    }
+    else {
+        $scriptblockInstall = {}
     }
     # Script block to clean up related files.
     $scriptblockCleanup = {
@@ -366,23 +410,50 @@ function CreateSchedPS1([int] $userState) {
         exit 1
     }
 }
+# List profile user name under SystemDrive\Users directory.
+$Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue
+$userName = ($Users | ForEach-Object {
+    # CPC will only contain Public folder and profile user name's folder.
+    # User name's folder will be the name we wanna to get.
+    If ($_.Name -ne "Public") {
+        return $_.Name
+    }
+})
+# Once we have the user name, we can get it's SID from service.
+# In case service not passed sid, we get sid from registry table.
+# Otherwise, exit.
+if ($UserSid.Length -ne 0) {
+    $sid = $UserSid
+} elseif ($userName.Count -eq 1) {
+    $sid = GetSid -CurrentUser $userName
+} else {
+    Log -Data "Failed to get user SID." -Class Error -ErrCode FailedToGetSID
+    exit 1
+}
 # Check if schedTask exists.
-$schedTaskExists = DetectSchedTask
+$schedTaskExists = SchedTaskDetected
 if ($schedTaskExists -eq $true) {
     $outputValues += "Remediation has been applied."
     Log -Data $outputValues -Class Succeeded
     exit 0
 }
+# Exit if Teams MachineWide Installer not installed on the machine.
+$machineWideExists = MachineWideExists
+if ($machineWideExists -eq $false) {
+    $outputValues += "Teams MachineWide Installer not installed."
+    Log -Data $outputValues -Class Succeeded
+    exit 0
+}
 # Check if Teams is broken.
 $teamsNeedUpdate = MachineWideNeedUpdate
-if ($teamsNeedUpdate -eq $false) {
+if ($teamsNeedUpdate -ne $true) {
     $outputValues += "Teams is fine."
     Log -Data $outputValues -Class Succeeded
     exit 0
 }
 # If user is active, won't do anything.
-$userState = InvokeUserdetect
-if ($userState -eq $userActive) {
+$userState = GetUserState
+if ($userState -eq [UserStates]::Active) {
     $log.UserStatus = $userState
     $outputValues += "User is active."
     Log -Data $outputValues -Class Succeeded
@@ -394,28 +465,14 @@ if ((test-path -Path $remediationFilesPath) -eq $false) {
     New-Item $remediationFilesPath -ItemType Directory > $null
 }
 DownloadMsi
+KillTeams
 UninstallMachinewide
 UninstallTeamsFromAllPaths
+RemoveAllUserRegistryKey
+RemoveFalseShortCut
 InstallMachinewide
 # Create PS1 file which will be triggered be schedTask in Phase 2.
 CreateSchedPS1 -userState $userState
-# List profile user name under SystemDrive\Users directory.
-$Users = Get-ChildItem -Path "$ENV:SystemDrive\Users" -Directory
-$userName = ($Users | ForEach-Object {
-    # CPC will only contain Public folder and profile user name's folder.
-    # User name's folder will be the name we wanna to get.
-    If ($_.Name -ne "Public") {
-        return $_.Name
-    }
-})
-# Once we have the user name, we can get it's SID from registry table.
-# In case the CPC is never logged by user, we pass sid from service.
-if ($null -eq $userName) {
-    $sid = $UserSid
-}
-else {
-    $sid = GetSid -CurrentUser $userName
-}
 if ($null -ne $sid) {
     # Create schedTask XML which will be used to setup schedTask.
     CreateSchedXML -SID $sid
