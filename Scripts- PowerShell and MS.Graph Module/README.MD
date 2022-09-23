@@ -1,6 +1,6 @@
 # Example Scripts using Microsoft.Graph Module with PowerShell
 ## Purpose
-The purpose of these scripts is to demonstrate functionality of the PowerShell functions contained in the Microsoft.Graph module with Windows 365. Each script is built off of the "Base Script.PS1" which is used to initiate the module installation, version check the module, and to authenticate against the MS Graph PowerShell public enterprise app.
+The purpose of these scripts is to demonstrate functionality of the PowerShell cmdlets contained in the Microsoft.Graph module with Windows 365. Each script is built off of the "Base Script.PS1" which is used to initiate the module installation, version check the module, and to authenticate against the MS Graph PowerShell public enterprise app.
 
 The hope is that the scripts will help others build their own solutions without having to start from scratch. More scripts will be added in the future, with the goal of having a script for each function. Make sure to check back often!
 ***
