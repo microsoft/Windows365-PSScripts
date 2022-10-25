@@ -26,10 +26,9 @@ $govCloudScope = "0af06dc6-e4b5-4f28-818e-e78e62d137a5/.default"
 
 <#
 .SYNOPSIS
-    Provision required AAD applications to public cloud tenant and government cloud tenant
+    Provision required AAD applications and consent required permissions to public cloud tenant and government cloud tenant
 .NOTES
     This function don't support PowerShell 7.
-    You may see some errors when run "Init". If it is because the application already exists, you can ignore the errors.
 #>
 function Init {
     if (!(Get-Module -ListAvailable -Name AzureAD)) {
@@ -40,52 +39,139 @@ function Init {
     Import-Module AzureAD
 
     Write-Host "Start provision required AAD applications for your tenants..."
-    Write-Host "You may see some errors, if it is because the application already exists, you can ignore the errors.`n" -ForegroundColor Yellow
 
+    $consentMaxRetryTimes = 6
+
+    # For Government cloud tenant
+    # Provsion applications
     Write-Host "Please log in with your public cloud admin account." -ForegroundColor Green
     Write-Host "Press Enter to continue...`n" -ForegroundColor Green
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     Connect-AzureAD
 
     Write-Host "Provision 'Microsoft Graph' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $msGraphAppId
+    $appIds = (Get-AzureADServicePrincipal -SearchString "Microsoft Graph")."AppId"
+    if (($null -eq $appIds) -or !($appIds.Contains($msGraphAppId))) {
+        try {
+            New-AzureADServicePrincipal -AppId $msGraphAppId
+        }
+        catch {
+            Write-Host "Provision failed." -ForegroundColor Red
+            Write-Host $_
+        }
     }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
+    else {
+        Write-Host "'Microsoft Graph' application already exists in tenant." -ForegroundColor Green
         Write-Host $_
     }
 
     Write-Host "Provision 'Windows 365 Tenant Mapping 3P' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $publicCloudClientId
+    $appIds = (Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping 3P")."AppId"
+    if (($null -eq $appIds) -or !($appIds.Contains($publicCloudClientId))) {
+        try {
+            New-AzureADServicePrincipal -AppId $publicCloudClientId
+        }
+        catch {
+            Write-Host "Provision failed." -ForegroundColor Red
+            Write-Host $_
+        }
     }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
+    else {
+        Write-Host "'Windows 365 Tenant Mapping 3P' application already exists in tenant." -ForegroundColor Green
         Write-Host $_
     }
+    
+    # Consent permissions
+    Write-Host "Consenting permissions for public cloud tenant..."
+    $publicCloudTenant = Get-AzureADTenantDetail
+    $publicCloudTenantID = $publicCloudTenant.ObjectId
+    if ($publicCloudTenantID -eq "") {
+        $publicCloudTenantID = Read-Host "Get Azure AD tenant ID failed. Please enter your public cloud tenant ID manually:" -ForegroundColor Green
+        $publicCloudTenantID
+        Write-Host
+    }
+    
+    Write-Host "Please input your public tenant admin account and password in opened web browser, then consent on behalf of your organization." -ForegroundColor Green
+    $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $publicCloudTenantID -Interactive -Scope $publicCloudScope
+    $retryTimes = 0
+    while (($null -eq $publicTokenObject.Scopes -or !$publicTokenObject.Scopes.Contains("https://graph.microsoft.com/CloudPC.Read.All") -or !$publicTokenObject.Scopes.Contains("https://graph.microsoft.com/CloudPC.ReadWrite.All")) -and ($retryTimes -lt $consentMaxRetryTimes)) {
+        Write-Host "Consenting is in progress..."
+        Start-Sleep -Seconds 10
+        $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $publicCloudTenantID -Silent -ForceRefresh -Scope $publicCloudScope
+        $retryTimes++
+    }
 
+    if ($null -eq $publicTokenObject.Scopes -or !$publicTokenObject.Scopes.Contains("https://graph.microsoft.com/CloudPC.Read.All") -or !$publicTokenObject.Scopes.Contains("https://graph.microsoft.com/CloudPC.ReadWrite.All")) {
+        Write-Host "Consenting permission doesn't take effect after $consentMaxRetryTimes times retry, please wait for a while and try again."
+    }
+    else {
+        Write-Host "Consenting permission completed." -ForegroundColor Green
+    }
+
+    # For Public cloud tenant
+    # Provsion applications
     Write-Host "Please log in with your government cloud admin account." -ForegroundColor Green
     Write-Host "Press Enter to continue...`n" -ForegroundColor Green
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     Connect-AzureAD
 
     Write-Host "Provision 'Cloud PC' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $firstPartyAppId
+    $appIds = (Get-AzureADServicePrincipal -SearchString "Cloud PC")."AppId"
+    if ($null -eq $appIds -or !($appIds.Contains($firstPartyAppId))) {
+        try {
+            New-AzureADServicePrincipal -AppId $firstPartyAppId
+        }
+        catch {
+            Write-Host "Provision failed." -ForegroundColor Red
+            Write-Host $_
+        }
     }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
+    else {
+        Write-Host "'Cloud PC' application already exists in tenant." -ForegroundColor Green
         Write-Host $_
     }
 
     Write-Host "Provision 'Windows 365 Tenant Mapping Gov 3P' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $govCloudClientId
+    $appIds = (Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping Gov 3P")."AppId"
+    if ($null -eq $appIds -or !($appIds.Contains($govCloudClientId))) {
+        try {
+            New-AzureADServicePrincipal -AppId $govCloudClientId
+        }
+        catch {
+            Write-Host "Provision failed." -ForegroundColor Red
+            Write-Host $_
+        }
     }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
+    else {
+        Write-Host "'Windows 365 Tenant Mapping Gov 3P' application already exists in tenant." -ForegroundColor Green
         Write-Host $_
+    }
+
+    # Consent permissions
+    Write-Host "Consenting permissions..."
+    $govCloudTenant = Get-AzureADTenantDetail
+    $govCloudTenantID = $govCloudTenant.ObjectId
+    if ($govCloudTenantID -eq "") {
+        $govCloudTenantID = Read-Host "Get Azure AD tenant ID failed. Please enter your government cloud tenant ID manually:" -ForegroundColor Green
+        $govCloudTenantID
+        Write-Host
+    }
+    
+    Write-Host "Please input your government tenant admin account and password in opened web browser, then consent on behalf of your organization" -ForegroundColor Green
+    $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $govCloudTenantID -Interactive -Scope $govCloudScope
+    $retryTimes = 0
+    while (($null -eq $govTokenObject.Scopes -or !$govTokenObject.Scopes.Contains("0af06dc6-e4b5-4f28-818e-e78e62d137a5/EndUser.Access")) -and ($retryTimes -lt $consentMaxRetryTimes)) {
+        Write-Host "Consenting is in progress..."
+        Start-Sleep -Seconds 10
+        $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $govCloudTenantID -Silent -ForceRefresh -Scope $govCloudScope
+        $retryTimes++
+    }
+
+    if ($null -eq $govTokenObject.Scopes -or !$govTokenObject.Scopes.Contains("0af06dc6-e4b5-4f28-818e-e78e62d137a5/EndUser.Access")) {
+        Write-Host "Consenting permission doesn't take effect after $consentMaxRetryTimes times retry, please wait for a while and try again."
+    }
+    else {
+        Write-Host "Consenting permission completed." -ForegroundColor Green
     }
 }
 
