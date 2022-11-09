@@ -6,6 +6,9 @@
     This script can help administrators on getting/adding tenant mapping and its prerequisite work (provision required AAD applications to tenants).
 #>
 
+[CmdletBinding()]
+param()
+
 Add-Type @"
   using System;
   using System.Runtime.InteropServices;
@@ -21,79 +24,31 @@ $firstPartyAppId = "0af06dc6-e4b5-4f28-818e-e78e62d137a5"
 $publicCloudClientId = "e3871b3f-5821-4695-b8c0-551ebcdcc3d2"
 $govCloudClientId = "be0df5cb-3aa5-444b-9586-e118fa3f7feb"
 
-$publicCloudScope = "https://graph.microsoft.com/.default"
-$govCloudScope = "0af06dc6-e4b5-4f28-818e-e78e62d137a5/.default"
+$graphBaseUri = "https://graph.microsoft.com"
+$publicCloudScope = "$graphBaseUri/.default"
+$govCloudScope = "$firstPartyAppId/.default"
 
-<#
-.SYNOPSIS
-    Provision required AAD applications to public cloud tenant and government cloud tenant
-.NOTES
-    This function don't support PowerShell 7.
-    You may see some errors when run "Init". If it is because the application already exists, you can ignore the errors.
-#>
-function Init {
+$publicClientPermission = "$graphBaseUri/CloudPC.ReadWrite.All"
+$govClientPermission = "$firstPartyAppId/EndUser.Access"
+
+# The max retry times for provision application is 6. The total waiting time is about 60s.
+$provisionMaxRetryTimes = 6
+# The max retry times for consenting permission is 30. The total waiting time is about 5 minutes.
+$consentMaxRetryTimes = 30
+
+function Import-Modules {
+    # Install AzureAD module if missing
     if (!(Get-Module -ListAvailable -Name AzureAD)) {
         Write-Host "Missing required module, will install module 'AzureAD'...`n" -ForegroundColor Green
         Install-Module AzureAD
     }
 
-    Import-Module AzureAD
-
-    Write-Host "Start provision required AAD applications for your tenants..."
-    Write-Host "You may see some errors, if it is because the application already exists, you can ignore the errors.`n" -ForegroundColor Yellow
-
-    Write-Host "Please log in with your public cloud admin account." -ForegroundColor Green
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    Connect-AzureAD
-
-    Write-Host "Provision 'Microsoft Graph' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $msGraphAppId
+    if ($PSVersionTable.PSVersion.Major -gt 5) {
+        Import-Module AzureAD -UseWindowsPowerShell | Out-Null
     }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
-        Write-Host $_
+    else {
+        Import-Module AzureAD
     }
-
-    Write-Host "Provision 'Windows 365 Tenant Mapping 3P' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $publicCloudClientId
-    }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
-        Write-Host $_
-    }
-
-    Write-Host "Please log in with your government cloud admin account." -ForegroundColor Green
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    Connect-AzureAD
-
-    Write-Host "Provision 'Cloud PC' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $firstPartyAppId
-    }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
-        Write-Host $_
-    }
-
-    Write-Host "Provision 'Windows 365 Tenant Mapping Gov 3P' application..."
-    try {
-        New-AzureADServicePrincipal -AppId $govCloudClientId
-    }
-    catch {
-        Write-Host "Provision failed." -ForegroundColor Red
-        Write-Host $_
-    }
-}
-
-function Get-TenantMapping {
-    param (
-        [guid]$PublicCloudTenantId,
-        [guid]$GovCloudTenantId
-    )
 
     # Install MSAL.PS module if missing
     if (!(Get-Module -ListAvailable -Name MSAL.PS)) {
@@ -102,26 +57,235 @@ function Get-TenantMapping {
     }
 
     Import-Module MSAL.PS # https://github.com/AzureAD/MSAL.PS
+}
+
+function Install-PublicApps {
+    if ($null -eq (Get-AzureADTenantDetail)) {
+        Write-Host "Please input your public tenant admin account and password in opened web browser!"
+        Connect-AzureAD | Out-String | Write-Verbose
+    }
+
+    Write-Host "Checking 'Microsoft Graph' application..."
+    $interval = 10
+    $totalTime = $interval * $provisionMaxRetryTimes
+    $app = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" | Where { $_.AppId -eq $msGraphAppId }
+    if ($null -eq $app) {
+        Write-Host "Provision 'Microsoft Graph' application..."
+        New-AzureADServicePrincipal -AppId $msGraphAppId | Out-String | Write-Verbose
+
+        $retryTimes = 0
+        while (($null -eq $app) -and ($retryTimes -lt $provisionMaxRetryTimes)) {
+            $retryTimes++
+            $app = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" | Where { $_.AppId -eq $msGraphAppId }
+            Write-Host "Provisioning 'Microsoft Graph' application is in progress...($retryTimes/$provisionMaxRetryTimes)"
+            Start-Sleep -Seconds $interval
+        }
+
+        if ($null -ne $app) {
+            Write-Host "Provisioning 'Microsoft Graph' application completed.`n" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Provisioning 'Microsoft Graph' application failed after $provisionMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+            Exit
+        }
+    }
+    else {
+        Write-Host "'Microsoft Graph' application already exists in tenant.`n" -ForegroundColor Green
+    }
+
+    Write-Host "Checking 'Windows 365 Tenant Mapping 3P' application..."
+    $app = Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping 3P" | Where { $_.AppId -eq $publicCloudClientId }
+    if ($null -eq $app) {
+        Write-Host "Provision 'Windows 365 Tenant Mapping 3P' application..."
+        New-AzureADServicePrincipal -AppId $publicCloudClientId | Out-String | Write-Verbose
+        
+        $retryTimes = 0
+        while (($null -eq $app) -and ($retryTimes -lt $provisionMaxRetryTimes)) {
+            $retryTimes++
+            $app = Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping 3P" | Where { $_.AppId -eq $publicCloudClientId }
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping 3P' application is in progress...($retryTimes/$provisionMaxRetryTimes)"
+            Start-Sleep -Seconds $interval
+        }
+
+        if ($null -ne $app) {
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping 3P' application completed.`n" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping 3P' application failed after $provisionMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+            Exit
+        }
+    }
+    else {
+        Write-Host "'Windows 365 Tenant Mapping 3P' application already exists in tenant.`n" -ForegroundColor Green
+    }
+}
+
+function Install-GovApps {
+    if ($null -eq (Get-AzureADTenantDetail)) {
+        Write-Host "Please input your government tenant admin account and password in opened web browser!"
+        Connect-AzureAD | Out-String | Write-Verbose
+    }
+
+    Write-Host "Checking 'Cloud PC' application..."
+    $interval = 10
+    $totalTime = $interval * $provisionMaxRetryTimes
+    $app = Get-AzureADServicePrincipal -SearchString "Cloud PC" | Where { $_.AppId -eq $firstPartyAppId }
+    if ($null -eq $app) {
+        Write-Host "Provision 'Cloud PC' application..."
+        New-AzureADServicePrincipal -AppId $firstPartyAppId | Out-String | Write-Verbose
+        
+        $retryTimes = 0
+        while (($null -eq $app) -and ($retryTimes -lt $provisionMaxRetryTimes)) {
+            $retryTimes++
+            $app = Get-AzureADServicePrincipal -SearchString "Cloud PC" | Where { $_.AppId -eq $firstPartyAppId }
+            Write-Host "Provisioning 'Cloud PC' application is in progress...($retryTimes/$provisionMaxRetryTimes)"
+            Start-Sleep -Seconds $interval
+        }
+
+        if ($null -ne $app) {
+            Write-Host "Provisioning 'Cloud PC' application completed.`n" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Provisioning 'Cloud PC' application failed after $provisionMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+            Exit
+        }
+    }
+    else {
+        Write-Host "'Cloud PC' application already exists in tenant.`n" -ForegroundColor Green
+    }
+
+    Write-Host "Checking 'Windows 365 Tenant Mapping Gov 3P' application..."
+    $app = Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping Gov 3P" | Where { $_.AppId -eq $govCloudClientId }
+    if ($null -eq $app) {
+        Write-Host "Provision 'Windows 365 Tenant Mapping Gov 3P' application..."
+        New-AzureADServicePrincipal -AppId $govCloudClientId | Out-String | Write-Verbose
+        
+        $retryTimes = 0
+        while (($null -eq $app) -and ($retryTimes -lt $provisionMaxRetryTimes)) {
+            $retryTimes++
+            $app = Get-AzureADServicePrincipal -SearchString "Windows 365 Tenant Mapping Gov 3P" | Where { $_.AppId -eq $govCloudClientId }
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping Gov 3P' application is in progress...($retryTimes/$provisionMaxRetryTimes)"
+            Start-Sleep -Seconds $interval
+        }
+
+        if ($null -ne $app) {
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping Gov 3P' application completed.`n" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Provisioning 'Windows 365 Tenant Mapping Gov 3P' application failed after $provisionMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+            Exit
+        }
+    }
+    else {
+        Write-Host "'Windows 365 Tenant Mapping Gov 3P' application already exists in tenant.`n" -ForegroundColor Green
+    }
+}
+
+function Get-PublicTenantToken {
+    param (
+        [guid]$PublicCloudTenantId
+    )
+
+    Write-Host "Getting public cloud tenant token..."
+    Write-Host "A web browser will open. Please input your public tenant admin account and password. If asked to consent permissions, please do so on behalf of your organization.`n" -ForegroundColor Green
+    # Bring the current PowerShell window into the foreground and activate the window.
+    $window = (Get-Process -id $pid).MainWindowHandle
+    $foreground = [SFW]::SetForegroundWindow($window)
+
+    # Consent permissions
+    $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $PublicCloudTenantId -Interactive -Scope $publicCloudScope
+    $interval = 10
+    $totalTime = $interval * $consentMaxRetryTimes
+    $retryTimes = 0
+    while (($null -eq $publicTokenObject.Scopes -or !$publicTokenObject.Scopes.Contains($publicClientPermission)) -and ($retryTimes -lt $consentMaxRetryTimes)) {
+        $retryTimes++
+        Write-Host "Consenting permissions for public cloud tenant is in progress...($retryTimes/$consentMaxRetryTimes)"
+        Start-Sleep -Seconds $interval
+        $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $PublicCloudTenantId -Silent -ForceRefresh -Scope $publicCloudScope
+    }
+
+    Write-Verbose -Message "Scopes in public token:"
+    Write-Verbose -Message ($publicTokenObject.Scopes -join ",")
+
+    if ($null -eq $publicTokenObject.Scopes -or !$publicTokenObject.Scopes.Contains($publicClientPermission)) {
+        Write-Host "Consenting permissions for public cloud tenant doesn't take effect after $consentMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+        Exit
+    }
+    else {
+        Write-Host "Permissions are consented`n" -ForegroundColor Green
+    }
+
+    $publicToken = $publicTokenObject.AccessToken
+
+    return $publicToken
+}
+
+function Get-GovTenantToken {
+    param (
+        [guid]$GovCloudTenantId
+    )
+
+    Write-Host "Getting government cloud tenant token..."
+    Write-Host "A web browser will open. Please input your government tenant admin account and password. If asked to consent permissions, please do so on behalf of your organization.`n" -ForegroundColor Green
+    # Bring the current PowerShell window into the foreground and activate the window.
+    $window = (Get-Process -id $pid).MainWindowHandle
+    $foreground = [SFW]::SetForegroundWindow($window)
     
+    # Consent permissions
+    $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $GovCloudTenantId -Interactive -Scope $govCloudScope
+    $interval = 10
+    $totalTime = $interval * $consentMaxRetryTimes
+    $retryTimes = 0
+    while (($null -eq $govTokenObject.Scopes -or !$govTokenObject.Scopes.Contains($govClientPermission)) -and ($retryTimes -lt $consentMaxRetryTimes)) {
+        $retryTimes++
+        Write-Host "Consenting permissions for government cloud tenant is in progress...($retryTimes/$consentMaxRetryTimes)"
+        Start-Sleep -Seconds $interval
+        $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $GovCloudTenantId -Silent -ForceRefresh -Scope $govCloudScope
+    }
+
+    Write-Verbose -Message "Scopes in government token:"
+    Write-Verbose -Message ($govTokenObject.Scopes -join ",")
+
+    if ($null -eq $govTokenObject.Scopes -or !$govTokenObject.Scopes.Contains($govClientPermission)) {
+        Write-Host "Consenting permissions for government cloud tenant doesn't take effect after $consentMaxRetryTimes times(total time: $totalTime seconds) retry, please wait for 10 minutes and try again. Exit...`n" -ForegroundColor Red
+        Exit
+    }
+    else {
+        Write-Host "Permissions are consented`n" -ForegroundColor Green
+    }
+
+    $govToken = $govTokenObject.AccessToken
+
+    return $govToken
+}
+
+function Get-TenantMapping {
+
+    Import-Modules
+
     Write-Host "Please input your public tenant admin account and password in opened web browser!"
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+    Connect-AzureAD | Out-String | Write-Verbose
+    Install-PublicApps
 
     # Get token for public cloud tenant
-    $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $PublicCloudTenantId -Interactive -Scope $publicCloudScope
-    $publicToken = $publicTokenObject.AccessToken
+    $publicCloudTenant = Get-AzureADTenantDetail
+    $publicCloudTenantID = $publicCloudTenant.ObjectId
+    $publicToken = Get-PublicTenantToken -PublicCloudTenantId $publicCloudTenantID
 
     # Bring the current PowerShell window into the foreground and activate the window.
     $window = (Get-Process -id $pid).MainWindowHandle
     $foreground = [SFW]::SetForegroundWindow($window)
 
     Write-Host "Please input your government tenant admin account and password in opened web browser!"
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+    Connect-AzureAD | Out-String | Write-Verbose
+    Install-GovApps
 
     # Get token for government cloud tenant
-    $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $GovCloudTenantId -Interactive -Scope $govCloudScope
-    $govToken = $govTokenObject.AccessToken
+    $govCloudTenant = Get-AzureADTenantDetail
+    $govCloudTenantID = $govCloudTenant.ObjectId
+    $govToken = Get-GovTenantToken -GovCloudTenantId $govCloudTenantID
 
     $url = "https://graph.microsoft.com/beta/deviceManagement/virtualEndpoint/crossCloudGovernmentOrganizationMapping"
     $headers = @{"Authorization" = "Bearer " + $publicToken; "x-ms-cloudpc-usgovcloudtenantaadtoken" = "Bearer " + $govToken; }
@@ -129,6 +293,8 @@ function Get-TenantMapping {
     Write-Host "Sending request...`n"
     try {
         $response = Invoke-WebRequest $url -Method "GET" -Headers $headers
+        Write-Verbose $response
+        
         if ("200" -eq $response.StatusCode) {
             Write-Host "There is an exist mapping!" -ForegroundColor Green
         }
@@ -140,15 +306,13 @@ function Get-TenantMapping {
         }
     }
     catch {
-        Write-Host "Encounter error when get tenant mapping! `nPlease retry or contact support for help." -ForegroundColor Red
+        Write-Host "Encounter error when get tenant mapping! `nPlease retry or contact support for help. If you have any questions or need assistance, please file a new service request in the Microsoft Intune admin center (intune.microsoft.com) -> Tenant Administration -> Help and support -> Windows 365." -ForegroundColor Red
+        Write-Verbose $_.Exception.Message
+        Write-Verbose (New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd()
     }
 }
 
 function Add-TenantMapping {
-    param (
-        [guid]$PublicCloudTenantId,
-        [guid]$GovCloudTenantId
-    )
     
     # Install MSAL.PS module if missing
     if (!(Get-Module -ListAvailable -Name MSAL.PS)) {
@@ -159,24 +323,28 @@ function Add-TenantMapping {
     Import-Module MSAL.PS # https://github.com/AzureAD/MSAL.PS
     
     Write-Host "Please input your public tenant admin account and password in opened web browser!"
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+    Connect-AzureAD | Out-String | Write-Verbose
+    Install-PublicApps
 
     # Get token for public cloud tenant
-    $publicTokenObject = Get-MsalToken -ClientId $publicCloudClientId -TenantId $PublicCloudTenantId -Interactive -Scope $publicCloudScope
-    $publicToken = $publicTokenObject.AccessToken
+    $publicCloudTenant = Get-AzureADTenantDetail
+    $publicCloudTenantID = $publicCloudTenant.ObjectId
+    $publicToken = Get-PublicTenantToken -PublicCloudTenantId $publicCloudTenantID
 
     # Bring the current PowerShell window into the foreground and activate the window.
     $window = (Get-Process -id $pid).MainWindowHandle
     $foreground = [SFW]::SetForegroundWindow($window)
 
     Write-Host "Please input your government tenant admin account and password in opened web browser!"
-    Write-Host "Press Enter to continue...`n" -ForegroundColor Green
-    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+    Connect-AzureAD | Out-String | Write-Verbose
+    Install-GovApps
 
     # Get token for government cloud tenant
-    $govTokenObject = Get-MsalToken -ClientId $govCloudClientId -TenantId $GovCloudTenantId -Interactive -Scope $govCloudScope
-    $govToken = $govTokenObject.AccessToken
+    $govCloudTenant = Get-AzureADTenantDetail
+    $govCloudTenantID = $govCloudTenant.ObjectId
+    $govToken = Get-GovTenantToken -GovCloudTenantId $govCloudTenantID
 
     $url = "https://graph.microsoft.com/beta/deviceManagement/virtualEndpoint/crossCloudGovernmentOrganizationMapping"
     $body = "{}"
@@ -186,6 +354,7 @@ function Add-TenantMapping {
     Write-Host "Sending request...`n"
     try {
         $response = Invoke-WebRequest $url -Method "POST" -Body $body -Headers $headers
+        Write-Verbose $response
 
         if ("200" -eq $response.StatusCode) {
             Write-Host "Added tenant mapping successfully!" -ForegroundColor Green
@@ -194,16 +363,42 @@ function Add-TenantMapping {
             throw "Non-200 status code"
         }
     }
-    catch {
-        Write-Host "Failed to add tenant mapping! `nPlease check if there is already an exist mapping. If there is an exist mapping for public cloud tenant or government cloud tenant, will fail to add new mapping for the tenant; otherwise, please retry or contact support for help." -ForegroundColor Red
+    catch [System.Net.WebException] {
+        Write-Verbose $_.Exception.Message
+        Write-Verbose (New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd()
+
+        Write-Verbose "Try to get tenant mapping..."
+        try {
+            $getResponse = Invoke-WebRequest $url -Method "GET" -Headers $headers
+            Write-Verbose $getResponse
+            
+            if ("200" -eq $getResponse.StatusCode) {
+                Write-Host "Failed to add tenant mapping because there is already an exist mapping between given tenants!" -ForegroundColor Red
+                Exit
+            }
+            elseif ("204" -eq $getResponse.StatusCode) {
+                Write-Verbose "There is no tenant mapping between given tenants."
+                Write-Host "Failed to add tenant mapping! Please check if there is other tenant mapping for public cloud tenant or government cloud tenant. If yes, it will fail adding new mapping because we only support 1:1 mapping now; otherwise, please retry adding or contact support for help. If you have any questions or need assistance, please file a new service request in the Microsoft Intune admin center (intune.microsoft.com) -> Tenant Administration -> Help and support -> Windows 365." -ForegroundColor Red
+                Exit
+            }
+            else {
+                throw "Non-200 and Non-204 status code"
+            }
+        }
+        catch [System.Net.WebException] {
+            Write-Verbose "Encounter error when getting tenant mapping."
+            Write-Verbose $_.Exception.Message
+            Write-Verbose (New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd()
+        }
+
+        Write-Host "Encounter error when adding tenant mapping! Please retry or contact support for help. If you have any questions or need assistance, please file a new service request in the Microsoft Intune admin center (intune.microsoft.com) -> Tenant Administration -> Help and support -> Windows 365." -ForegroundColor Red
     }
 }
 
-$init = New-Object System.Management.Automation.Host.ChoiceDescription '&Init', 'Provision required AAD applications to your tenants. Only need to run this once if you have not provisioned before.'
 $add = New-Object System.Management.Automation.Host.ChoiceDescription '&Add', 'Add a new tenant mapping'
 $get = New-Object System.Management.Automation.Host.ChoiceDescription '&Get', 'Get specific tenant mapping'
 $skip = New-Object System.Management.Automation.Host.ChoiceDescription '&Skip', 'Do nothing and exit. Choose this when import this script as module'
-$options = [System.Management.Automation.Host.ChoiceDescription[]]($init, $add, $get, $skip)
+$options = [System.Management.Automation.Host.ChoiceDescription[]]($add, $get, $skip)
 
 $title = 'Tenant mapping operations'
 $message = 'Please select your operation:'
@@ -211,35 +406,18 @@ $result = $host.ui.PromptForChoice($title, $message, $options, 0)
 Write-Host
 
 switch ($result) {
-    0 { Init }
-    1 { 
-        $publicCloudTenantID = Read-Host "Please enter your public cloud tenant ID"
-        $publicCloudTenantID
-        Write-Host
-
-        $govCloudTenantID = Read-Host "Please enter your government cloud tenant ID"
-        $govCloudTenantID
-        Write-Host
-
-        Add-TenantMapping -PublicCloudTenantId $publicCloudTenantID -GovCloudTenantId $govCloudTenantID
+    0 { 
+        Add-TenantMapping
     }
-    2 { 
-        $publicCloudTenantID = Read-Host "Please enter your public cloud tenant ID"
-        $publicCloudTenantID
-        Write-Host
-
-        $govCloudTenantID = Read-Host "Please enter your government cloud tenant ID"
-        $govCloudTenantID
-        Write-Host
-
-        Get-TenantMapping -PublicCloudTenantId $publicCloudTenantID -GovCloudTenantId $govCloudTenantID
+    1 { 
+        Get-TenantMapping
     }
 }
 # SIG # Begin signature block
-# MIIntwYJKoZIhvcNAQcCoIInqDCCJ6QCAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# MIInngYJKoZIhvcNAQcCoIInjzCCJ4sCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDOs2QS7BIFJMUA
-# WoymPFhsSg4/OSwAV/VBYgYqfS7Nh6CCDYEwggX/MIID56ADAgECAhMzAAACzI61
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCKhOETc3OCDSix
+# keMQZsrN+dzKR2eE7ZWgp5A7mZybF6CCDYEwggX/MIID56ADAgECAhMzAAACzI61
 # lqa90clOAAAAAALMMA0GCSqGSIb3DQEBCwUAMH4xCzAJBgNVBAYTAlVTMRMwEQYD
 # VQQIEwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNy
 # b3NvZnQgQ29ycG9yYXRpb24xKDAmBgNVBAMTH01pY3Jvc29mdCBDb2RlIFNpZ25p
@@ -311,141 +489,141 @@ switch ($result) {
 # xw4o7t5lL+yX9qFcltgA1qFGvVnzl6UJS0gQmYAf0AApxbGbpT9Fdx41xtKiop96
 # eiL6SJUfq/tHI4D1nvi/a7dLl+LrdXga7Oo3mXkYS//WsyNodeav+vyL6wuA6mk7
 # r/ww7QRMjt/fdW1jkT3RnVZOT7+AVyKheBEyIXrvQQqxP/uozKRdwaGIm1dxVk5I
-# RcBCyZt2WwqASGv9eZ/BvW1taslScxMNelDNMYIZjDCCGYgCAQEwgZUwfjELMAkG
+# RcBCyZt2WwqASGv9eZ/BvW1taslScxMNelDNMYIZczCCGW8CAQEwgZUwfjELMAkG
 # A1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1JlZG1vbmQx
 # HjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEoMCYGA1UEAxMfTWljcm9z
 # b2Z0IENvZGUgU2lnbmluZyBQQ0EgMjAxMQITMwAAAsyOtZamvdHJTgAAAAACzDAN
 # BglghkgBZQMEAgEFAKCBrjAZBgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgor
-# BgEEAYI3AgELMQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQgl38wn5+t
-# KH4w1oEpg3Qe1qxQubCyr7rGp1VRbrGR5jIwQgYKKwYBBAGCNwIBDDE0MDKgFIAS
+# BgEEAYI3AgELMQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQgCrTjPHQw
+# oDo7/WNOVMqSu0vovbotgEX6n13QT7+8cUowQgYKKwYBBAGCNwIBDDE0MDKgFIAS
 # AE0AaQBjAHIAbwBzAG8AZgB0oRqAGGh0dHA6Ly93d3cubWljcm9zb2Z0LmNvbTAN
-# BgkqhkiG9w0BAQEFAASCAQAwMAvA5oDps4Xu6QZhWADKdX7wNjD6wDKI67t36UHr
-# BBSzyk0nnrts3BuspypH87MlxPUCHeoohfgIeLLqVhia52RN8UP0QzH8OxtwVl0B
-# pEcy3OpvRdjZCbC7yqqiobUkgvFzXlPM3rChwVxZSiX0SFP9ozjtPcQL2aGNvDaz
-# v5RUbq2PHSURnGHrJo8Z9EuzAangeykG7lWTBV+iVakDcoIVyJyMHn5u5Lma4I1e
-# 98mtcx79mq8ezaBgkUaVbdSr5mPJOcBp5v6IBSBktlUh1jm0L/lkKFcuyUdZrbhx
-# kScnP1A2glMfEhgDRK/F6aiL8Zc1uvS20gNgLAGuEkP+oYIXFjCCFxIGCisGAQQB
-# gjcDAwExghcCMIIW/gYJKoZIhvcNAQcCoIIW7zCCFusCAQMxDzANBglghkgBZQME
-# AgEFADCCAVkGCyqGSIb3DQEJEAEEoIIBSASCAUQwggFAAgEBBgorBgEEAYRZCgMB
-# MDEwDQYJYIZIAWUDBAIBBQAEIGOAwFRMBjtelggwkSKvgaf23tV34RWCHa5G5dmt
-# ToooAgZjKwD6x18YEzIwMjIwOTI2MDcxNjQzLjcwOFowBIACAfSggdikgdUwgdIx
+# BgkqhkiG9w0BAQEFAASCAQCg0CxbrK3mxwhiGx3LMHLBGjatqb219DhOaojg9KsL
+# fhWBaRyK1CgnUbxnyrhTQhxmuu5is9nfe9737bJq5Huet/fx/inTjXtJzE3wLsR5
+# 38EWGOWO6qJ2KHaCsCRyvxHna9maRP5dntN5ZokgnigQM3jU961u7hlHUp1m70HJ
+# LNw2WeNmGEyRrRUmhMGzYrp/ltTRO3y5iE2GJf5OCC6fDCTgVp9Px5mNeDC87lh+
+# xVVRT1viqIPMGpLwmQvW6DKNVEH9GxWzUxYTbpqNKQlrgLRvK55oboD2AdEMi2cK
+# U4Hhxz/ADl6ydepZnNQj6PiKUaJ3O7tyC0RyXRkbRKDcoYIW/TCCFvkGCisGAQQB
+# gjcDAwExghbpMIIW5QYJKoZIhvcNAQcCoIIW1jCCFtICAQMxDzANBglghkgBZQME
+# AgEFADCCAVEGCyqGSIb3DQEJEAEEoIIBQASCATwwggE4AgEBBgorBgEEAYRZCgMB
+# MDEwDQYJYIZIAWUDBAIBBQAEIDB/+cBkDN1RotkF7IFrE50dTrfnJbsmaJASmGhf
+# Osk1AgZjYqQs35MYEzIwMjIxMTA5MDcwNDI3LjM3NFowBIACAfSggdCkgc0wgcox
 # CzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRt
-# b25kMR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xLTArBgNVBAsTJE1p
-# Y3Jvc29mdCBJcmVsYW5kIE9wZXJhdGlvbnMgTGltaXRlZDEmMCQGA1UECxMdVGhh
-# bGVzIFRTUyBFU046MTc5RS00QkIwLTgyNDYxJTAjBgNVBAMTHE1pY3Jvc29mdCBU
-# aW1lLVN0YW1wIFNlcnZpY2WgghFlMIIHFDCCBPygAwIBAgITMwAAAYo+OI3SDgL6
-# 6AABAAABijANBgkqhkiG9w0BAQsFADB8MQswCQYDVQQGEwJVUzETMBEGA1UECBMK
-# V2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0
-# IENvcnBvcmF0aW9uMSYwJAYDVQQDEx1NaWNyb3NvZnQgVGltZS1TdGFtcCBQQ0Eg
-# MjAxMDAeFw0yMTEwMjgxOTI3NDJaFw0yMzAxMjYxOTI3NDJaMIHSMQswCQYDVQQG
-# EwJVUzETMBEGA1UECBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwG
-# A1UEChMVTWljcm9zb2Z0IENvcnBvcmF0aW9uMS0wKwYDVQQLEyRNaWNyb3NvZnQg
-# SXJlbGFuZCBPcGVyYXRpb25zIExpbWl0ZWQxJjAkBgNVBAsTHVRoYWxlcyBUU1Mg
-# RVNOOjE3OUUtNEJCMC04MjQ2MSUwIwYDVQQDExxNaWNyb3NvZnQgVGltZS1TdGFt
-# cCBTZXJ2aWNlMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAt/+ut6GD
-# AyAZvegBhagWd0GoqT8lFHMepoWNOLPPEEoLuya4X3n+K14FvlZwFmKwqap6B+6E
-# kITSjkecTSB6QRA4kivdJydlLvKrg8udtBu67LKyjQqwRzDQTRhECxpU30tdBE/A
-# eyP95k7qndhIu/OpT4QGyGJUiMDlmZAiDPY5FJkitUgGvwMBHwogJz8FVEBFnViA
-# URTJ4kBDiU6ppbv4PI97+vQhpspDK+83gayaiRC3gNTGy3iOie6Psl03cvYIiFcA
-# JRP4O0RkeFlv/SQoomz3JtsMd9ooS/XO0vSN9h2DVKONMjaFOgnN5Rk5iCqwmn6q
-# sme+haoR/TrCBS0zXjXsWTgkljUBtt17UBbW8RL+9LNw3cjPJ8EYRglMNXCYLM6G
-# zCDXEvE9T//sAv+k1c84tmoiZDZBqBgr/SvL+gVsOz3EoDZQ26qTa1bEn/npxMmX
-# ctoZSe8SRDqgK0JUWhjKXgnyaOADEB+FtfIi+jdcUJbpPtAL4kWvVSRKipVv8MEu
-# YRLexXEDEBi+V4tfKApZhE4ga0p+QCiawHLBZNoj3UQNzM5QVmGai3MnQFbZkhqb
-# UDypo9vaWEeVeO35JfdLWjwRgvMX3VKZL57d7jmRjiVlluXjZFLx+rhJL7JYVptO
-# PtF1MAtMYlp6OugnOpG+4W4MGHqj7YYfP0UCAwEAAaOCATYwggEyMB0GA1UdDgQW
-# BBQj2kPY/WwZ1Jeup0lHhD4xkGkkAzAfBgNVHSMEGDAWgBSfpxVdAF5iXYP05dJl
-# pxtTNRnpcjBfBgNVHR8EWDBWMFSgUqBQhk5odHRwOi8vd3d3Lm1pY3Jvc29mdC5j
-# b20vcGtpb3BzL2NybC9NaWNyb3NvZnQlMjBUaW1lLVN0YW1wJTIwUENBJTIwMjAx
-# MCgxKS5jcmwwbAYIKwYBBQUHAQEEYDBeMFwGCCsGAQUFBzAChlBodHRwOi8vd3d3
-# Lm1pY3Jvc29mdC5jb20vcGtpb3BzL2NlcnRzL01pY3Jvc29mdCUyMFRpbWUtU3Rh
-# bXAlMjBQQ0ElMjAyMDEwKDEpLmNydDAMBgNVHRMBAf8EAjAAMBMGA1UdJQQMMAoG
-# CCsGAQUFBwMIMA0GCSqGSIb3DQEBCwUAA4ICAQDF9MESsPXDeRtfFo1f575iPfF9
-# ARWbeuuNfM583IfTxfzZf2dv/me3DNi/KcNNEnR1TKbZtG7Lsg0cy/pKIEQOJG2f
-# YaWwIIKYwuyDJI2Q4kVi5mzbV/0C5+vQQsQcCvfsM8K5X2ffifJi7tqeG0r58Cjg
-# we7xBYvguPmjUNxwTWvEjZIPfpjVUoaPCl6qqs0eFUb7bcLhzTEEYBnAj8MENhiP
-# 5IJd4Pp5lFqHTtpec67YFmGuO/uIA/TjPBfctM5kUI+uzfyh/yIdtDNtkIz+e/xm
-# XSFhiQER0uBjRobQZV6c+0TNtvRNLayU4u7Eekd7OaDXzQR0RuWGaSiwtN6Xc/Po
-# NP0rezG6Ovcyow1qMoUkUEQ7qqD0Qq8QFwK0DKCdZSJtyBKMBpjUYCnNUZbYvTTW
-# m4DXK5RYgf23bVBJW4Xo5w490HHo4TjWNqz17PqPyMCTnM8HcAqTnPeME0dPYvbd
-# wzDMgbumydbJaq/06FImkJ7KXs9jxqDiE2PTeYnaj82n6Q//PqbHuxxJmwQO4fzd
-# OgVqAEkG1XDmppVKW/rJxBN3IxyVr6QP9chY2MYVa0bbACI2dvU+R2QJlE5AjoMK
-# y68WI1pmFT3JKBrracpy6HUjGrtV+/1U52brrElClVy5Fb8+UZWZLp82cuCztJMM
-# SqW+kP5zyVBSvLM+4DCCB3EwggVZoAMCAQICEzMAAAAVxedrngKbSZkAAAAAABUw
-# DQYJKoZIhvcNAQELBQAwgYgxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5n
-# dG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9y
-# YXRpb24xMjAwBgNVBAMTKU1pY3Jvc29mdCBSb290IENlcnRpZmljYXRlIEF1dGhv
-# cml0eSAyMDEwMB4XDTIxMDkzMDE4MjIyNVoXDTMwMDkzMDE4MzIyNVowfDELMAkG
-# A1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1JlZG1vbmQx
-# HjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEmMCQGA1UEAxMdTWljcm9z
-# b2Z0IFRpbWUtU3RhbXAgUENBIDIwMTAwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAw
-# ggIKAoICAQDk4aZM57RyIQt5osvXJHm9DtWC0/3unAcH0qlsTnXIyjVX9gF/bErg
-# 4r25PhdgM/9cT8dm95VTcVrifkpa/rg2Z4VGIwy1jRPPdzLAEBjoYH1qUoNEt6aO
-# RmsHFPPFdvWGUNzBRMhxXFExN6AKOG6N7dcP2CZTfDlhAnrEqv1yaa8dq6z2Nr41
-# JmTamDu6GnszrYBbfowQHJ1S/rboYiXcag/PXfT+jlPP1uyFVk3v3byNpOORj7I5
-# LFGc6XBpDco2LXCOMcg1KL3jtIckw+DJj361VI/c+gVVmG1oO5pGve2krnopN6zL
-# 64NF50ZuyjLVwIYwXE8s4mKyzbnijYjklqwBSru+cakXW2dg3viSkR4dPf0gz3N9
-# QZpGdc3EXzTdEonW/aUgfX782Z5F37ZyL9t9X4C626p+Nuw2TPYrbqgSUei/BQOj
-# 0XOmTTd0lBw0gg/wEPK3Rxjtp+iZfD9M269ewvPV2HM9Q07BMzlMjgK8QmguEOqE
-# UUbi0b1qGFphAXPKZ6Je1yh2AuIzGHLXpyDwwvoSCtdjbwzJNmSLW6CmgyFdXzB0
-# kZSU2LlQ+QuJYfM2BjUYhEfb3BvR/bLUHMVr9lxSUV0S2yW6r1AFemzFER1y7435
-# UsSFF5PAPBXbGjfHCBUYP3irRbb1Hode2o+eFnJpxq57t7c+auIurQIDAQABo4IB
-# 3TCCAdkwEgYJKwYBBAGCNxUBBAUCAwEAATAjBgkrBgEEAYI3FQIEFgQUKqdS/mTE
-# mr6CkTxGNSnPEP8vBO4wHQYDVR0OBBYEFJ+nFV0AXmJdg/Tl0mWnG1M1GelyMFwG
-# A1UdIARVMFMwUQYMKwYBBAGCN0yDfQEBMEEwPwYIKwYBBQUHAgEWM2h0dHA6Ly93
-# d3cubWljcm9zb2Z0LmNvbS9wa2lvcHMvRG9jcy9SZXBvc2l0b3J5Lmh0bTATBgNV
-# HSUEDDAKBggrBgEFBQcDCDAZBgkrBgEEAYI3FAIEDB4KAFMAdQBiAEMAQTALBgNV
-# HQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAfBgNVHSMEGDAWgBTV9lbLj+iiXGJo
-# 0T2UkFvXzpoYxDBWBgNVHR8ETzBNMEugSaBHhkVodHRwOi8vY3JsLm1pY3Jvc29m
-# dC5jb20vcGtpL2NybC9wcm9kdWN0cy9NaWNSb29DZXJBdXRfMjAxMC0wNi0yMy5j
-# cmwwWgYIKwYBBQUHAQEETjBMMEoGCCsGAQUFBzAChj5odHRwOi8vd3d3Lm1pY3Jv
-# c29mdC5jb20vcGtpL2NlcnRzL01pY1Jvb0NlckF1dF8yMDEwLTA2LTIzLmNydDAN
-# BgkqhkiG9w0BAQsFAAOCAgEAnVV9/Cqt4SwfZwExJFvhnnJL/Klv6lwUtj5OR2R4
-# sQaTlz0xM7U518JxNj/aZGx80HU5bbsPMeTCj/ts0aGUGCLu6WZnOlNN3Zi6th54
-# 2DYunKmCVgADsAW+iehp4LoJ7nvfam++Kctu2D9IdQHZGN5tggz1bSNU5HhTdSRX
-# ud2f8449xvNo32X2pFaq95W2KFUn0CS9QKC/GbYSEhFdPSfgQJY4rPf5KYnDvBew
-# VIVCs/wMnosZiefwC2qBwoEZQhlSdYo2wh3DYXMuLGt7bj8sCXgU6ZGyqVvfSaN0
-# DLzskYDSPeZKPmY7T7uG+jIa2Zb0j/aRAfbOxnT99kxybxCrdTDFNLB62FD+Cljd
-# QDzHVG2dY3RILLFORy3BFARxv2T5JL5zbcqOCb2zAVdJVGTZc9d/HltEAY5aGZFr
-# DZ+kKNxnGSgkujhLmm77IVRrakURR6nxt67I6IleT53S0Ex2tVdUCbFpAUR+fKFh
-# bHP+CrvsQWY9af3LwUFJfn6Tvsv4O+S3Fb+0zj6lMVGEvL8CwYKiexcdFYmNcP7n
-# tdAoGokLjzbaukz5m/8K6TT4JDVnK+ANuOaMmdbhIurwJ0I9JZTmdHRbatGePu1+
-# oDEzfbzL6Xu/OHBE0ZDxyKs6ijoIYn/ZcGNTTY3ugm2lBRDBcQZqELQdVTNYs6Fw
-# ZvKhggLUMIICPQIBATCCAQChgdikgdUwgdIxCzAJBgNVBAYTAlVTMRMwEQYDVQQI
-# EwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3Nv
-# ZnQgQ29ycG9yYXRpb24xLTArBgNVBAsTJE1pY3Jvc29mdCBJcmVsYW5kIE9wZXJh
-# dGlvbnMgTGltaXRlZDEmMCQGA1UECxMdVGhhbGVzIFRTUyBFU046MTc5RS00QkIw
-# LTgyNDYxJTAjBgNVBAMTHE1pY3Jvc29mdCBUaW1lLVN0YW1wIFNlcnZpY2WiIwoB
-# ATAHBgUrDgMCGgMVAIDw82OvG1MFBB2n/4weVqpzV8ShoIGDMIGApH4wfDELMAkG
-# A1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1JlZG1vbmQx
-# HjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEmMCQGA1UEAxMdTWljcm9z
-# b2Z0IFRpbWUtU3RhbXAgUENBIDIwMTAwDQYJKoZIhvcNAQEFBQACBQDm224YMCIY
-# DzIwMjIwOTI2MDgxNzI4WhgPMjAyMjA5MjcwODE3MjhaMHQwOgYKKwYBBAGEWQoE
-# ATEsMCowCgIFAObbbhgCAQAwBwIBAAICEbgwBwIBAAICEc8wCgIFAObcv5gCAQAw
-# NgYKKwYBBAGEWQoEAjEoMCYwDAYKKwYBBAGEWQoDAqAKMAgCAQACAwehIKEKMAgC
-# AQACAwGGoDANBgkqhkiG9w0BAQUFAAOBgQAn6doQMbiXiyQTrcxyQduptabHbVlw
-# hEsbRLY3iXGZE88w/bvsP/Q2AyxTk3/ln1hjNBB0pgDIgAUXjkd9BSZ3PLFKB6Lx
-# Lod5UsbS2feXrBksh+/lxAtoFTFGZIk12W3VzZXvE0FbdXs4i4WwkYtQ1SnHoY6b
-# 99rkkwUZkAr0tTGCBA0wggQJAgEBMIGTMHwxCzAJBgNVBAYTAlVTMRMwEQYDVQQI
+# b25kMR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xJTAjBgNVBAsTHE1p
+# Y3Jvc29mdCBBbWVyaWNhIE9wZXJhdGlvbnMxJjAkBgNVBAsTHVRoYWxlcyBUU1Mg
+# RVNOOjdCRjEtRTNFQS1CODA4MSUwIwYDVQQDExxNaWNyb3NvZnQgVGltZS1TdGFt
+# cCBTZXJ2aWNloIIRVDCCBwwwggT0oAMCAQICEzMAAAGfK0U1FQguS10AAQAAAZ8w
+# DQYJKoZIhvcNAQELBQAwfDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0
+# b24xEDAOBgNVBAcTB1JlZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3Jh
+# dGlvbjEmMCQGA1UEAxMdTWljcm9zb2Z0IFRpbWUtU3RhbXAgUENBIDIwMTAwHhcN
+# MjExMjAyMTkwNTIyWhcNMjMwMjI4MTkwNTIyWjCByjELMAkGA1UEBhMCVVMxEzAR
+# BgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1JlZG1vbmQxHjAcBgNVBAoTFU1p
+# Y3Jvc29mdCBDb3Jwb3JhdGlvbjElMCMGA1UECxMcTWljcm9zb2Z0IEFtZXJpY2Eg
+# T3BlcmF0aW9uczEmMCQGA1UECxMdVGhhbGVzIFRTUyBFU046N0JGMS1FM0VBLUI4
+# MDgxJTAjBgNVBAMTHE1pY3Jvc29mdCBUaW1lLVN0YW1wIFNlcnZpY2UwggIiMA0G
+# CSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQCk9Xl8TVGyiZAvzm8tB4fLP0znL883
+# YDIG03js1/WzCaICXDs0kXlJ39OUZweBFa/V8l27mlBjyLZDtTg3W8dQORDunfn7
+# SzZEoFmlXaSYcQhyDMV5ghxi6lh8y3NV1TNHGYLzaoQmtBeuFSlEH9wp6rC/sRK7
+# GPrOn17XAGzo+/yFy7DfWgIQ43X35ut20TShUeYDrs5GOVpHp7ouqQYRTpu+lAaC
+# Hfq8tr+LFqIyjpkvxxb3Hcx6Vjte0NPH6GnICT84PxWYK7eoa5AxbsTUqWQyiWtr
+# GoyQyXP4yIKfTUYPtsTFCi14iuJNr3yRGjo4U1OHZU2yGmWeCrdccJgkby6k2N5A
+# hRYvKHrePPh5oWHY01g8TckxV4h4iloqvaaYGh3HDPWPw4KoKyEy7QHGuZK1qAkh
+# eWiKX2qE0eNRWummCKPhdcF3dcViVI9aKXhty4zM76tsUjcdCtnG5VII6eU6dzcL
+# 6YFp0vMl7JPI3y9Irx9sBEiVmSigM2TDZU4RUIbFItD60DJYzNH0rGu2Dv39P/0O
+# wox37P3ZfvB5jAeg6B+SBSD0awi+f61JFrVc/UZ83W+5tgI/0xcLGWHBNdEibSF1
+# NFfrV0KPCKfi9iD2BkQgMYi02CY8E3us+UyYA4NFYcWJpjacBKABeDBdkY1BPfGg
+# zskaKhIGhdox9QIDAQABo4IBNjCCATIwHQYDVR0OBBYEFGI08tUeExYrSA4u6N/Z
+# asfWHchhMB8GA1UdIwQYMBaAFJ+nFV0AXmJdg/Tl0mWnG1M1GelyMF8GA1UdHwRY
+# MFYwVKBSoFCGTmh0dHA6Ly93d3cubWljcm9zb2Z0LmNvbS9wa2lvcHMvY3JsL01p
+# Y3Jvc29mdCUyMFRpbWUtU3RhbXAlMjBQQ0ElMjAyMDEwKDEpLmNybDBsBggrBgEF
+# BQcBAQRgMF4wXAYIKwYBBQUHMAKGUGh0dHA6Ly93d3cubWljcm9zb2Z0LmNvbS9w
+# a2lvcHMvY2VydHMvTWljcm9zb2Z0JTIwVGltZS1TdGFtcCUyMFBDQSUyMDIwMTAo
+# MSkuY3J0MAwGA1UdEwEB/wQCMAAwEwYDVR0lBAwwCgYIKwYBBQUHAwgwDQYJKoZI
+# hvcNAQELBQADggIBAB2KKCk8O+kZ8+m9bPXQIAmo+6xbKDaKkMR3/82A8XVAMa9R
+# pItYJkdkta+C6ZIVBsZEARJkKnWpYJiiyGBV3PmPoIMP5zFbr0BYLMolDJZMtH3M
+# ifVBD9NknYNKg+GbWyaAPs8VZ6UD3CRzjoVZ2PbHRH+UOl2Yc/cm1IR3BlvjlcNw
+# ykpzBGUndARefuzjfRSfB+dBzmlFY+dME8+J3OvveMraIcznSrlr46GXMoWGJt0h
+# BJNf4G5JZqyXe8n8z2yR5poL2uiMRzqIXX1rwCIXhcLPFgSKN/vJxrxHiF9ByVio
+# uf4jCcD8O2mO94toCSqLERuodSe9dQ7qrKVBonDoYWAx+W0XGAX2qaoZmqEun7Qb
+# 8hnyNyVrJ2C2fZwAY2yiX3ZMgLGUrpDRoJWdP+tc5SS6KZ1fwyhL/KAgjiNPvUBi
+# u7PF4LHx5TRFU7HZXvgpZDn5xktkXZidA4S26NZsMSygx0R1nXV3ybY3JdlNfRET
+# t6SIfQdCxRX5YUbI5NdvuVMiy5oB3blfhPgNJyo0qdmkHKE2pN4c8iw9SrajnWcM
+# 0bUExrDkNqcwaq11Dzwc0lDGX14gnjGRbghl6HLsD7jxx0+buzJHKZPzGdTLMFKo
+# SdJeV4pU/t3dPbdU21HS60Ex2Ip2TdGfgtS9POzVaTA4UucuklbjZkQihfg2MIIH
+# cTCCBVmgAwIBAgITMwAAABXF52ueAptJmQAAAAAAFTANBgkqhkiG9w0BAQsFADCB
+# iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1Jl
+# ZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEyMDAGA1UEAxMp
+# TWljcm9zb2Z0IFJvb3QgQ2VydGlmaWNhdGUgQXV0aG9yaXR5IDIwMTAwHhcNMjEw
+# OTMwMTgyMjI1WhcNMzAwOTMwMTgzMjI1WjB8MQswCQYDVQQGEwJVUzETMBEGA1UE
+# CBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9z
+# b2Z0IENvcnBvcmF0aW9uMSYwJAYDVQQDEx1NaWNyb3NvZnQgVGltZS1TdGFtcCBQ
+# Q0EgMjAxMDCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAOThpkzntHIh
+# C3miy9ckeb0O1YLT/e6cBwfSqWxOdcjKNVf2AX9sSuDivbk+F2Az/1xPx2b3lVNx
+# WuJ+Slr+uDZnhUYjDLWNE893MsAQGOhgfWpSg0S3po5GawcU88V29YZQ3MFEyHFc
+# UTE3oAo4bo3t1w/YJlN8OWECesSq/XJprx2rrPY2vjUmZNqYO7oaezOtgFt+jBAc
+# nVL+tuhiJdxqD89d9P6OU8/W7IVWTe/dvI2k45GPsjksUZzpcGkNyjYtcI4xyDUo
+# veO0hyTD4MmPfrVUj9z6BVWYbWg7mka97aSueik3rMvrg0XnRm7KMtXAhjBcTyzi
+# YrLNueKNiOSWrAFKu75xqRdbZ2De+JKRHh09/SDPc31BmkZ1zcRfNN0Sidb9pSB9
+# fvzZnkXftnIv231fgLrbqn427DZM9ituqBJR6L8FA6PRc6ZNN3SUHDSCD/AQ8rdH
+# GO2n6Jl8P0zbr17C89XYcz1DTsEzOUyOArxCaC4Q6oRRRuLRvWoYWmEBc8pnol7X
+# KHYC4jMYctenIPDC+hIK12NvDMk2ZItboKaDIV1fMHSRlJTYuVD5C4lh8zYGNRiE
+# R9vcG9H9stQcxWv2XFJRXRLbJbqvUAV6bMURHXLvjflSxIUXk8A8FdsaN8cIFRg/
+# eKtFtvUeh17aj54WcmnGrnu3tz5q4i6tAgMBAAGjggHdMIIB2TASBgkrBgEEAYI3
+# FQEEBQIDAQABMCMGCSsGAQQBgjcVAgQWBBQqp1L+ZMSavoKRPEY1Kc8Q/y8E7jAd
+# BgNVHQ4EFgQUn6cVXQBeYl2D9OXSZacbUzUZ6XIwXAYDVR0gBFUwUzBRBgwrBgEE
+# AYI3TIN9AQEwQTA/BggrBgEFBQcCARYzaHR0cDovL3d3dy5taWNyb3NvZnQuY29t
+# L3BraW9wcy9Eb2NzL1JlcG9zaXRvcnkuaHRtMBMGA1UdJQQMMAoGCCsGAQUFBwMI
+# MBkGCSsGAQQBgjcUAgQMHgoAUwB1AGIAQwBBMAsGA1UdDwQEAwIBhjAPBgNVHRMB
+# Af8EBTADAQH/MB8GA1UdIwQYMBaAFNX2VsuP6KJcYmjRPZSQW9fOmhjEMFYGA1Ud
+# HwRPME0wS6BJoEeGRWh0dHA6Ly9jcmwubWljcm9zb2Z0LmNvbS9wa2kvY3JsL3By
+# b2R1Y3RzL01pY1Jvb0NlckF1dF8yMDEwLTA2LTIzLmNybDBaBggrBgEFBQcBAQRO
+# MEwwSgYIKwYBBQUHMAKGPmh0dHA6Ly93d3cubWljcm9zb2Z0LmNvbS9wa2kvY2Vy
+# dHMvTWljUm9vQ2VyQXV0XzIwMTAtMDYtMjMuY3J0MA0GCSqGSIb3DQEBCwUAA4IC
+# AQCdVX38Kq3hLB9nATEkW+Geckv8qW/qXBS2Pk5HZHixBpOXPTEztTnXwnE2P9pk
+# bHzQdTltuw8x5MKP+2zRoZQYIu7pZmc6U03dmLq2HnjYNi6cqYJWAAOwBb6J6Gng
+# ugnue99qb74py27YP0h1AdkY3m2CDPVtI1TkeFN1JFe53Z/zjj3G82jfZfakVqr3
+# lbYoVSfQJL1AoL8ZthISEV09J+BAljis9/kpicO8F7BUhUKz/AyeixmJ5/ALaoHC
+# gRlCGVJ1ijbCHcNhcy4sa3tuPywJeBTpkbKpW99Jo3QMvOyRgNI95ko+ZjtPu4b6
+# MhrZlvSP9pEB9s7GdP32THJvEKt1MMU0sHrYUP4KWN1APMdUbZ1jdEgssU5HLcEU
+# BHG/ZPkkvnNtyo4JvbMBV0lUZNlz138eW0QBjloZkWsNn6Qo3GcZKCS6OEuabvsh
+# VGtqRRFHqfG3rsjoiV5PndLQTHa1V1QJsWkBRH58oWFsc/4Ku+xBZj1p/cvBQUl+
+# fpO+y/g75LcVv7TOPqUxUYS8vwLBgqJ7Fx0ViY1w/ue10CgaiQuPNtq6TPmb/wrp
+# NPgkNWcr4A245oyZ1uEi6vAnQj0llOZ0dFtq0Z4+7X6gMTN9vMvpe784cETRkPHI
+# qzqKOghif9lwY1NNje6CbaUFEMFxBmoQtB1VM1izoXBm8qGCAsswggI0AgEBMIH4
+# oYHQpIHNMIHKMQswCQYDVQQGEwJVUzETMBEGA1UECBMKV2FzaGluZ3RvbjEQMA4G
+# A1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0IENvcnBvcmF0aW9uMSUw
+# IwYDVQQLExxNaWNyb3NvZnQgQW1lcmljYSBPcGVyYXRpb25zMSYwJAYDVQQLEx1U
+# aGFsZXMgVFNTIEVTTjo3QkYxLUUzRUEtQjgwODElMCMGA1UEAxMcTWljcm9zb2Z0
+# IFRpbWUtU3RhbXAgU2VydmljZaIjCgEBMAcGBSsOAwIaAxUAdF2umB/yywxFLFTC
+# 8rJ9Fv9c9reggYMwgYCkfjB8MQswCQYDVQQGEwJVUzETMBEGA1UECBMKV2FzaGlu
+# Z3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0IENvcnBv
+# cmF0aW9uMSYwJAYDVQQDEx1NaWNyb3NvZnQgVGltZS1TdGFtcCBQQ0EgMjAxMDAN
+# BgkqhkiG9w0BAQUFAAIFAOcVtBMwIhgPMjAyMjExMDkxMzA3MzFaGA8yMDIyMTEx
+# MDEzMDczMVowdDA6BgorBgEEAYRZCgQBMSwwKjAKAgUA5xW0EwIBADAHAgEAAgIH
+# uDAHAgEAAgIRkjAKAgUA5xcFkwIBADA2BgorBgEEAYRZCgQCMSgwJjAMBgorBgEE
+# AYRZCgMCoAowCAIBAAIDB6EgoQowCAIBAAIDAYagMA0GCSqGSIb3DQEBBQUAA4GB
+# ANzbzyIrhmfESJolNJr9iG8Jtb8kxuJ/viQZE2jESKdtnnOFd8sVyLWOLK5wXlMo
+# i9W1YECmtDgphbzm1oZr9CnfhNVjljT+3G9o9bQ9I7hdcHFgXNnyOHivWdWKuXss
+# zT8ZHkD8C5dAO6AnoJHdrrgP4K01W9eggFVhQ36tqhArMYIEDTCCBAkCAQEwgZMw
+# fDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1Jl
+# ZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEmMCQGA1UEAxMd
+# TWljcm9zb2Z0IFRpbWUtU3RhbXAgUENBIDIwMTACEzMAAAGfK0U1FQguS10AAQAA
+# AZ8wDQYJYIZIAWUDBAIBBQCgggFKMBoGCSqGSIb3DQEJAzENBgsqhkiG9w0BCRAB
+# BDAvBgkqhkiG9w0BCQQxIgQghGuWzpvtF+W+PwIvOXGugHzJZOLHaBEf+/tm9eDm
+# ZzMwgfoGCyqGSIb3DQEJEAIvMYHqMIHnMIHkMIG9BCCG8V4poieJnqXnVzwNUeje
+# KgLJfEH7P+jspyw3S3xc2jCBmDCBgKR+MHwxCzAJBgNVBAYTAlVTMRMwEQYDVQQI
 # EwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3Nv
 # ZnQgQ29ycG9yYXRpb24xJjAkBgNVBAMTHU1pY3Jvc29mdCBUaW1lLVN0YW1wIFBD
-# QSAyMDEwAhMzAAABij44jdIOAvroAAEAAAGKMA0GCWCGSAFlAwQCAQUAoIIBSjAa
-# BgkqhkiG9w0BCQMxDQYLKoZIhvcNAQkQAQQwLwYJKoZIhvcNAQkEMSIEIHtcqCKT
-# ytgC8YVhj1Wd6tkWV64KvVwzyuFGkLpMXyT5MIH6BgsqhkiG9w0BCRACLzGB6jCB
-# 5zCB5DCBvQQg9L3gq3XfSr5+879/MPgxtZCFBoTtEeQ4foCSOU1UKb0wgZgwgYCk
-# fjB8MQswCQYDVQQGEwJVUzETMBEGA1UECBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMH
-# UmVkbW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0IENvcnBvcmF0aW9uMSYwJAYDVQQD
-# Ex1NaWNyb3NvZnQgVGltZS1TdGFtcCBQQ0EgMjAxMAITMwAAAYo+OI3SDgL66AAB
-# AAABijAiBCAaTP55pL1MaGp58u9IwI0dZzN66S7glh14y2g8LY2WqTANBgkqhkiG
-# 9w0BAQsFAASCAgCdK2tlyRIvxY/PVIjUJDhSgpXpN1S8gf6GdfThBq8TZF6wqL88
-# yMAeOk0Sw9t8DbzUsZE7PAMtIpAyuC1xXV33e3AjDtNo/DfgmNWSQmZuCkmEE19j
-# ljrbJjGdLUwQ33ctSMLQ0bN8zn06M7wdCPn2/P8AucYxHNMcxOX+s0OrGORIpp2v
-# JHZIFKnpObD12HJndiefKKeXAVAf9jGL3m5a+gK1Q3Vv4X2rkeRAwSnixGwFF+yh
-# 88udwBQPZMezwNhw7eltVrpwC8eEZu053Kg2t72y35HxwN9SGbjNWvppKvf0l9vc
-# Oxtf2FLAeXZ3NX70M9igtC7y/5JFQfweHwZwybsYVMmEdWo49Mhd4BZ1yOxvrRvM
-# 8yUtiR4rww+z0wvQlZE7MvqxIUho4NEMG5tefARUN2fHiYjuYJO6LiyFThmlrun0
-# Uy/Ew261CUf8dfLuafhgycoVlOuvIF/3GoWZWIbjcZWuefNkS+aTgfR3wir0v4kh
-# MRnoPwRn+oCmPtVpYNvpxA7S0XaEnScNBSpB2VygbedPTpa1mryZvVTY+etZT4zE
-# tUbB4s8V3AvVRS0zud2p9M8ZOf+J2WdcJIYX+kqx/Y5tljYg0ZcolSpH3NoMoSZv
-# ksSdhEUvRXmazYm2JTlFvmiRh2qvVtxB8atR/FyGTzP4LFUT7oXAMOwPxw==
+# QSAyMDEwAhMzAAABnytFNRUILktdAAEAAAGfMCIEILadAktraAsm4lMzjGapvVEl
+# zQJ1Z17eGly/CS0gGk8lMA0GCSqGSIb3DQEBCwUABIICAIIiT7r8fl31pxIKyHVS
+# +V8B0wywqDAMCG8Iy7IVKnTCRRZvEAWHcHWq4DjeE4Efah/nZuG+yM5dZoriU1jB
+# 56VhZD4im9PCsumw8WhonxGtG0ruWKVKkG0/PMwlwwYfkUFA4uGd48ef/Hv8jPQ7
+# qtQ0pQ1zl1WgHvEHCtY3a+5A74Fs+2MHs6LG7ErAdBjdFavhP30e4yCqTHXwKrrW
+# zzZnUF7/ZdBV77tE8PokgkyiI7J96F2EjbUcUTC0hEjnJU8+MQ+Bm3htbdo8733p
+# Ocmkkr5ocrvguGytafHzIOU2Ph4x0FeJohq91G9N0fL37z3YL1eKbgOAZdlcTr6r
+# ahjLy+RYA8Vw54El0tuFTgwUNR3xWO1NENq0PrC3Xe+lpKZdCYLTihOj9RkmXswP
+# HiRn4xbyLfly2W788aoazRXn0zSqwhVKrdOO5eUqVukr2MdDT4lBTv+o4vMBH33H
+# +1wE/UCLO0rrlRG8IbHveTVA9MGrS3++G9K5+yQy4B412pR/PUcejFRZwL5RDWCu
+# V3qJ26mCal1tyOoCv9mCAnneQ+cpco0iLzZgYOi/Fbz34IVZK6Qp6Rp33cb13UBo
+# Dpe9BDjcoQjtejQJ/0Fl6U4Mx3vyFwvrk8k+cfC23czq/YppuMSqHprsONoltOHz
+# +mVir1HJnwv6zseaB0DGjYMU
 # SIG # End signature block
