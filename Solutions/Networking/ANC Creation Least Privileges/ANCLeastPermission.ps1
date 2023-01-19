@@ -9,7 +9,7 @@ Param(
     [string]$SubscriptionID,
     [parameter(mandatory = $true, HelpMessage = "The name of a resource group in the subscription you just entered")] 
     [string]$ResourceGroupName,
-    [parameter(mandatory = $true, HelpMessage = "The id of a VNet in the subscription you just entered. e.g. /subscriptions/{SubscriptionID}/resourceGroups/{ResourceGroupID}/providers/Microsoft.Network/virtualNetworks/{VNetName}")] 
+    [parameter(mandatory = $true, HelpMessage = "The id of a VNet in the subscription you just entered. e.g. /subscriptions/{SubscriptionID}/resourceGroups/{ResourceGroupName}/providers/Microsoft.Network/virtualNetworks/{VNetName}")] 
     [string]$VnetResourceID
 )
 $SubscriptionID = "/subscriptions/" + $SubscriptionID
