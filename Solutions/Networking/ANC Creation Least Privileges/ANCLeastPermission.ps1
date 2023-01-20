@@ -12,8 +12,8 @@ Param(
     [parameter(mandatory = $true, HelpMessage = "The id of a VNet in the subscription you just entered. e.g. /subscriptions/{SubscriptionID}/resourceGroups/{ResourceGroupName}/providers/Microsoft.Network/virtualNetworks/{VNetName}")] 
     [string]$VnetResourceID
 )
-$SubscriptionID = "/subscriptions/" + $SubscriptionID
-$ResourceGroupID = $SubscriptionID + "/resourceGroups/" + $ResourceGroupName
+$SubscriptionID = "/subscriptions/" + $SubscriptionID.Trim()
+$ResourceGroupID = $SubscriptionID + "/resourceGroups/" + $ResourceGroupName.Trim()
 
 
 #modules required for this script
@@ -117,6 +117,29 @@ function invoke-modulecheck {
     }
 }
 
+function invoke-assignRole {
+    param (
+        [string] $Scope,
+        [string] $ApplicationId,
+        [string] $RoleDefinitionName
+    )
+    try {
+        Write-Output "Try to assign role $RoleDefinitionName on $Scope..." | out-host
+        New-AzRoleAssignment -Scope $Scope -ApplicationId $ApplicationId -RoleDefinitionName $RoleDefinitionName -ErrorAction Stop | Out-Null
+        Write-Output "Succeeded" | out-host
+    }
+    catch {
+        if ($_.Exception.Message -eq "Operation returned an invalid status code 'Conflict'") {
+            Write-Output "Skip assign role $RoleDefinitionName on $Scope because it already exists." | Out-Host -Verbose
+            return
+        }
+
+        Write-Output "Failed to create role assignment for $RoleDefinitionName on $Scope" | out-host
+        throw
+    }
+}
+
+
 #Calls the function to see if required modules are installed
 invoke-modulecheck
 
@@ -140,9 +163,10 @@ foreach ($path in $paths) {
     }
     catch {
         if ($_.Exception.Message -eq "Operation returned an invalid status code 'Conflict'") {
+            Write-Output "Skip create role definition from $path because it already exists." | Out-Host -Verbose
             continue;
         }
-        Write-Output "Failed to create role definition from " $path | Out-Host -Verbose
+        Write-Output "Failed to create role definition from $path" | Out-Host -Verbose
         write-output $_.Exception.Message | out-host
         exit
     }
@@ -162,15 +186,12 @@ catch{
 #Assings the new roles to the Win365 APP
 Write-Output "Assigning the new roles to the Windows 365 app..." | out-host
 try {
-    Write-Output "Try to assign role " $role
-    New-AzRoleAssignment -Scope $SubscriptionID -ApplicationId $AppID -RoleDefinitionName $RoleNameForSubscription -ErrorAction Stop | Out-Null
-    New-AzRoleAssignment -Scope $ResourceGroupID -ApplicationId $AppID -RoleDefinitionName $RoleNameForResourceGroup -ErrorAction Stop | Out-Null
-    New-AzRoleAssignment -Scope $VnetResourceID -ApplicationId $AppID -RoleDefinitionName $RoleNameForVnet -ErrorAction Stop | Out-Null
+    invoke-assignRole -Scope $SubscriptionID  -ApplicationId $AppID -RoleDefinitionName $RoleNameForSubscription -ErrorAction Stop | Out-Null
+    invoke-assignRole -Scope $ResourceGroupID -ApplicationId $AppID -RoleDefinitionName $RoleNameForResourceGroup -ErrorAction Stop | Out-Null
+    invoke-assignRole -Scope $VnetResourceID -ApplicationId $AppID -RoleDefinitionName $RoleNameForVnet -ErrorAction Stop | Out-Null
 }
 catch {
-    Write-Output "Failed to create role " $role
     write-output $_.Exception.Message | out-host
-    exit
 }
 
 #Clean Up
