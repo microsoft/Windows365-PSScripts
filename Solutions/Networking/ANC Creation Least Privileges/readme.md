@@ -17,7 +17,7 @@ The script performs the following steps:
 To use this script from command line, the user can either supply the Subscription ID with the parameter "-SubscriptionID" or can run the script, which will then prompt for the ID.
 
 **Example:**
-`script_name.ps1 -SubscriptionID [your id]`
+`ANCLeastPermission.ps1 -SubscriptionID [your subscription id] -ResourceGroupName [a resource group name in the subscription] -VnetResourceID [the full resource id of your vnet in the subscription]`
 
 
 ## Requirements
@@ -29,6 +29,12 @@ The following PowerShell modules are required for successful execution of this s
 
 ### Azure Subscription ID
 Users of this script will be required to supply the Subscription ID of the Azure Subscription that holds the Windows 365 instance. The Subscription ID can be supplied at the command line using the "-SubscriptionID" parameter, or can supply the ID at the prompt if run without the parameter.
+
+### Resource Group ID
+Users of this script will be required to supply the resource group name in the Azure Subscription that holds the Windows 365 instance. The resource group name can be supplied at the command line using the "-ResourceGroupName" parameter, or can supply the name at the prompt if run without the parameter.
+
+### Vnet Resource ID
+Users of this script will be required to supply the full Vnet Resource ID in the Azure Subscription that holds the Windows 365 instance. The Vnet Resource ID can be supplied at the command line using the "-VnetResourceID" parameter, or can supply the ID at the prompt if run without the parameter.
 
 ### Permissions
 User will be required to have administrative level rights on the Azure Subscription.

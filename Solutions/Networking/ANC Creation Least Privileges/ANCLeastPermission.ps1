@@ -1,4 +1,4 @@
-﻿<#
+<#
 .COPYRIGHT
 Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 See LICENSE in the project root for license information.
@@ -6,8 +6,15 @@ See LICENSE in the project root for license information.
 
 Param(
     [parameter(mandatory = $true, HelpMessage = "Subscription ID")] 
-    [string]$SubscriptionID
+    [string]$SubscriptionID,
+    [parameter(mandatory = $true, HelpMessage = "The name of a resource group in the subscription you just entered")] 
+    [string]$ResourceGroupName,
+    [parameter(mandatory = $true, HelpMessage = "The id of a VNet in the subscription you just entered. e.g. /subscriptions/{SubscriptionID}/resourceGroups/{ResourceGroupName}/providers/Microsoft.Network/virtualNetworks/{VNetName}")] 
+    [string]$VnetResourceID
 )
+$SubscriptionID = "/subscriptions/" + $SubscriptionID.Trim()
+$ResourceGroupID = $SubscriptionID + "/resourceGroups/" + $ResourceGroupName.Trim()
+
 
 #modules required for this script
 $modules = @("az.accounts",
@@ -21,10 +28,14 @@ $paths = @("$env:windir\temp\Sub.json",
     "$env:windir\temp\VNet.json"
 )
 
+$RoleNameForSubscription = "Windows365RequiredRoleForSubscription"
+$RoleNameForResourceGroup = "Windows365RequiredRoleForResourceGroup"
+$RoleNameForVNet = "Windows365RequiredRoleForVNet"
+
 #Role names to be created
-$Roles = @("Windows365RequiredRoleForSubscription",
-    "Windows365RequiredRoleForResourceGroup",
-    "Windows365RequiredRoleForVNet"
+$Roles = @($Windows365RequiredRoleForSubscription,
+    $RoleNameForResourceGroup,
+    $RoleNameForVNet
 )
 
 #JSON formatted variables used to create role permissions
@@ -36,11 +47,12 @@ $CustomRoleSubJSON = @"
     "Description": "Windows365RequiredRoleForSubscription",
     "Actions": [
         "Microsoft.Resources/subscriptions/read",
-        "Microsoft.Resources/subscriptions/operationresults/read"
+        "Microsoft.Resources/subscriptions/operationresults/read",
+        "Microsoft.Compute/images/read"
     ],
     "NotActions": [],
     "AssignableScopes": [
-        "/subscriptions/$SubscriptionID"
+        "$SubscriptionID"
     ]
 }
 "@
@@ -67,7 +79,7 @@ $CustomRoleRGJSON = @"
     ],
     "NotActions": [],
     "AssignableScopes": [
-        "/subscriptions/$SubscriptionID"
+        "$SubscriptionID"
     ]
 }
 "@
@@ -85,7 +97,7 @@ $CustomRoleVNetJSON = @"
     ],
     "NotActions": [],
     "AssignableScopes": [
-        "/subscriptions/$subscriptionID"
+        "$SubscriptionID"
     ]
 }
 "@
@@ -104,6 +116,29 @@ function invoke-modulecheck {
         }
     }
 }
+
+function invoke-assignRole {
+    param (
+        [string] $Scope,
+        [string] $ApplicationId,
+        [string] $RoleDefinitionName
+    )
+    try {
+        Write-Output "Try to assign role $RoleDefinitionName on $Scope..." | out-host
+        New-AzRoleAssignment -Scope $Scope -ApplicationId $ApplicationId -RoleDefinitionName $RoleDefinitionName -ErrorAction Stop | Out-Null
+        Write-Output "Succeeded" | out-host
+    }
+    catch {
+        if ($_.Exception.Message -eq "Operation returned an invalid status code 'Conflict'") {
+            Write-Output "Skip assign role $RoleDefinitionName on $Scope because it already exists." | Out-Host -Verbose
+            return
+        }
+
+        Write-Output "Failed to create role assignment for $RoleDefinitionName on $Scope" | out-host
+        throw
+    }
+}
+
 
 #Calls the function to see if required modules are installed
 invoke-modulecheck
@@ -127,7 +162,11 @@ foreach ($path in $paths) {
         New-AzRoleDefinition -InputFile $path -ErrorAction Stop | Out-Null
     }
     catch {
-        Write-Output "Failed to create role definition from " $path | Out-Host
+        if ($_.Exception.Message -eq "Operation returned an invalid status code 'Conflict'") {
+            Write-Output "Skip create role definition from $path because it already exists." | Out-Host -Verbose
+            continue;
+        }
+        Write-Output "Failed to create role definition from $path" | Out-Host -Verbose
         write-output $_.Exception.Message | out-host
         exit
     }
@@ -146,15 +185,13 @@ catch{
 
 #Assings the new roles to the Win365 APP
 Write-Output "Assigning the new roles to the Windows 365 app..." | out-host
-foreach ($role in $roles) {
-    try {
-        New-AzRoleAssignment -ApplicationId $AppID -RoleDefinitionName $role -ErrorAction Stop | Out-Null
-    }
-    catch {
-        Write-Output "Failed to create role " $role
-        write-output $_.Exception.Message | out-host
-        exit
-    }
+try {
+    invoke-assignRole -Scope $SubscriptionID  -ApplicationId $AppID -RoleDefinitionName $RoleNameForSubscription -ErrorAction Stop | Out-Null
+    invoke-assignRole -Scope $ResourceGroupID -ApplicationId $AppID -RoleDefinitionName $RoleNameForResourceGroup -ErrorAction Stop | Out-Null
+    invoke-assignRole -Scope $VnetResourceID -ApplicationId $AppID -RoleDefinitionName $RoleNameForVnet -ErrorAction Stop | Out-Null
+}
+catch {
+    write-output $_.Exception.Message | out-host
 }
 
 #Clean Up
