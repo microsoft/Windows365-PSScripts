@@ -21,7 +21,8 @@ Param(
 
 #JSON sources if using Web
 $commercial = 'https://www.microsoft.com/en-us/download/details.aspx?id=56519'
-$GCCH = "https://www.microsoft.com/en-us/download/confirmation.aspx?id=57063"
+#old link $GCCH = "https://www.microsoft.com/en-us/download/confirmation.aspx?id=57063"
+$GCCH = "https://www.microsoft.com/en-us/download/details.aspx?id=57063"
 
 #output CSV file
 $CSVFile = "$PSSCriptRoot\W365-Gateways.CSV"
