@@ -1,0 +1,2 @@
+﻿"CloudPcId","DeviceName","UserPrincipalName","UserId", "SourceServicePlanId", "TargetServicePlanId", "ProvisionPolicyId", "SkuId", "AssignedGroupId"
+"a121a705-62a4-4f29-8fd2-05a7a574b608","CPC-Hanna-66DGB", "Hannah03@w365testshself01.onmicrosoft.com", "76a7cc06-7b94-4531-91e7-5c4eeab2fa1e", "224cb644-16cc-418d-aa1d-301cf90fcad1", "44c9d681-eb5c-4e09-821d-a9020e19b80b", "69f53857-f877-4a6a-9125-2a49e38bf7ff", "8f970b06-1ec8-4028-a76d-2f9e93b07bfa", "ed3baaf5-29f5-423c-adc7-ac59c0655035"
