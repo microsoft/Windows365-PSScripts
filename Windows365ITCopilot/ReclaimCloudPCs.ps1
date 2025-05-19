@@ -3,6 +3,7 @@
 Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 See LICENSE in the project root for license information.
 #>
+using module ".\Model\CloudPcModel.psm1"
 
 try {   
     # Import Helper Module
@@ -28,14 +29,20 @@ try {
         throw "File is not exist：$csvPath"
     }
 
-    $data = Import-Csv -Path $csvPath
-    $cloudPCInfoList = @($data)
-
-    # Validate Required Properties
-    $cloudPCInfoList | ForEach-Object {
-        if ((Validate-ResizedCloudPC -CloudPC $_) -ne 1) {
-            throw "Invalid CloudPC: $($_.DeviceName)，please check the source data"
-        }
+    $cloudPCInfoList = @()
+    Import-Csv -Path $csvPath | ForEach-Object {
+        $cloudPCModel = [CloudPcModel]::new(
+        $_.CloudPcId,
+        $_.DeviceName,
+        $_.UserPrincipalName,
+        $_.UserId,
+        $_.SourceServicePlanId,
+        $_.TargetServicePlanId,
+        ionPolicyId,
+        $_.SkuId,
+        $_.AssignedGroupId
+        )
+        $cloudPCInfoList += $cloudPCModel
     }
 
     # Revoke the license from the user

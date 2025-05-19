@@ -497,3 +497,4 @@ function Bind-EntraGroupToProvisioningPolicy{
         $response = Invoke-MgGraphRequest -Method POST -Uri $assignPolicyToGroupUrl -Body $body
     }
 }
+
