@@ -19,17 +19,14 @@ $Separator = "------------------------------------------------------------------
         The CloudPC graph based url
     .PARAMETER TenantId
         The TenantId
-    .PARAMETER SourceDataPath
+    .PARAMETER CloudPCListPath
         The path of the source data, it should be a csv file
-    .PARAMETER GraphScopes
-        The required graph permissions
 #>
 function Reclaim-CloudPCs {
     param (
-        [string]$CloudPCBasedUrl,
+        [string]$CloudPCBasedUrl = "https://graph.microsoft.com/beta",
         [string]$TenantId,
-        [string]$SourceDataPath,
-        [string[]]$GraphScopes
+        [string]$CloudPCListPath
     )
 
     try {
@@ -45,20 +42,20 @@ function Reclaim-CloudPCs {
         Setup-EnvironmentConfig -CloudPCBasedUrl $CloudPCBasedUrl -TenantId $TenantId
 
         # Setup Graph Config and Get Required Permission
-        if ((Setup-GraphConfig -GraphScopes $GraphScopes) -eq 1){
+        if ((Setup-GraphConfig -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All") -eq 1){
             throw "Failed to setup Graph Config"
         }
 
         # Import source data
         Write-Host $Separator
-        Write-Host "Import reclaimed Cloud PCs from $SourceDataPath"
+        Write-Host "Import reclaimed Cloud PCs from $CloudPCListPath"
      
-        if (-Not (Test-Path $SourceDataPath)) {
-            throw "File is not exist：$SourceDataPath"
+        if (-Not (Test-Path $CloudPCListPath)) {
+            throw "File is not exist：$CloudPCListPath"
         }
 
         $cloudPCInfoList = @()
-        Import-Csv -Path $SourceDataPath | ForEach-Object {
+        Import-Csv -Path $CloudPCListPath | ForEach-Object {
             $cloudPCModel = [CloudPcModel]::new(
             $_.CloudPcId,
             $_.DeviceName,
@@ -95,7 +92,7 @@ function Reclaim-CloudPCs {
         # Wait all Cloud PCs enter grace period status
         Write-Output $Separator
         Write-Output "Wait all Cloud PCs enter grace period status"
-        Show-SleepProgress -Duration 60
+        Show-SleepProgress -Duration 120
 
         $cloudPCInfoList | ForEach-Object { Deprovision-GracePeriodCloudPC -DeviceName $_.DeviceName }
 
@@ -104,7 +101,7 @@ function Reclaim-CloudPCs {
 
     } catch {
         write-output "Failed to reclaim CloudPCs" | out-host
-        write-output $_.Exception | Format-List * -Force
+        write-output $_
     }
 }
 
@@ -121,15 +118,14 @@ function Reclaim-CloudPCs {
         The CloudPC graph based url
     .PARAMETER TenantId
         The TenantId
-    .PARAMETER SourceDataPath
+    .PARAMETER CloudPCListPath
         The path of the source data, it should be a csv file
 #>
 function Resize-CloudPCs {
     param (
-        [string]$CloudPCBasedUrl,
+        [string]$CloudPCBasedUrl = "https://graph.microsoft.com/beta",
         [string]$TenantId,
-        [string]$SourceDataPath,
-        [string[]]$GraphScopes
+        [string]$CloudPCListPath
     )
 
     try {   
@@ -145,17 +141,17 @@ function Resize-CloudPCs {
         Setup-EnvironmentConfig -CloudPCBasedUrl $CloudPCBasedUrl -TenantId $TenantId
 
         # Setup Graph Config and Get Required Permission
-        if (Setup-GraphConfig -eq 1) {
+        if ((Setup-GraphConfig -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All") -eq 1){
             throw "Failed to setup Graph Config"
         }
 
         # Import source data
-        if (-Not (Test-Path $SourceDataPath)) {
-            throw "File is not exist：$SourceDataPath"
+        if (-Not (Test-Path $CloudPCListPath)) {
+            throw "File is not exist：$CloudPCListPath"
         }
 
         $cloudPCInfoList = @()
-        Import-Csv -Path $SourceDataPath | ForEach-Object {
+        Import-Csv -Path $CloudPCListPath | ForEach-Object {
             $cloudPCModel = [CloudPcModel]::new(
             $_.CloudPcId,
             $_.DeviceName,
@@ -206,7 +202,7 @@ function Resize-CloudPCs {
         # Wait for group based CloudPC enter into license pending status
         Write-Host $Separator
         Write-Host "Wait all group based license Cloud PCs enter license pending status"
-        Show-SleepProgress -Duration 10
+        Show-SleepProgress -Duration 240
 
         $groupBasedLicenseDeivceList = $cloudPCInfoList | Where-Object { $_.LisenceAssignedGroupId }
         # Check the CloudPCs status
@@ -239,8 +235,6 @@ function Resize-CloudPCs {
             $userIds = $group.Group | Select-Object -ExpandProperty UserId
             $skuIds = ,@($group.Group | Select-Object -ExpandProperty TargetSkuId)
             $cloudPCIds = $group.Group | Select-Object -ExpandProperty CloudPCId
-
-            Write-Host "skuid: $skuIds"
 
             # Create new entra groups for group base license Cloud PCs
             Write-Host $Separator

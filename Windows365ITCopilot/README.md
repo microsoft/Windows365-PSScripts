@@ -19,11 +19,8 @@ The CloudPC graph based url
 ##### TenantId
 The TenantId
 
-##### SourceDataPath
+##### CloudPCListPath
 The path of the source data, it should be a csv file
-
-##### GraphScopes
-The required graph permissions
 
 #### Required Permission
 User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
@@ -33,27 +30,25 @@ User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
 PowerShell Command
 ```powershell
 Import-Module "C:\repos\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
-Reclaim-CloudPCs -CloudPCBasedUrl "https://canary.graph.microsoft.com/testprodbeta_cpc_int" -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -SourceDataPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleDataForLicenseManagement.CSV" -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All"
+Reclaim-CloudPCs -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -CloudPCListPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleData\SampleDataForLicenseManagement.CSV"
 ```
 
-Step1
-Setup environment, connect to graph
+Step1: Setup environment, connect to graph
 ![ReclaimConnectionToGraph](./Image/ReclaimConnectionToGraph.png)
 
-Step2
-Consent to remove licnenses
+Step2 (manually consent): You need to consent to remove licnenses
 ![ConsentToRemoveLicense](./Image/ConsentToRemoveLicense.png)
 
-Step3
-Wait for All the Cloud PCs enter into grace period status and start deprovision Cloud PCs
+Step3 (manually consent):
+Wait for All the Cloud PCs enter into grace period status and you need to consent to start deprovision Cloud PCs
 ![WaitToGracePeriodStatus](./Image/WaitToGracePeriodStatus.png)
 
-Step4
+Step4:
 Success to depovision CloudPCs
-![DeprovisionSuccess.png](./Image/DeprovisionSuccess.png.png)
+![DeprovisionSuccess.png](./Image/DeprovisionSuccess.png)
 
-### Reclaim-CloudPCs
-This function is used to reclaim Enterprise Cloud PCs, including those assigned licenses directly as well as those managed through group-based licensing.
+### Resize-CloudPCs
+This function is used to resize Enterprise Cloud PCs, including those assigned licenses directly as well as those managed through group-based licensing.
 
 #### Parameters
 
@@ -63,11 +58,8 @@ The CloudPC graph based url
 ##### TenantId
 The TenantId
 
-##### SourceDataPath
+##### CloudPCListPath
 The path of the source data, it should be a csv file
-
-##### GraphScopes
-The required graph permissions
 
 #### Required Permission
 User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
@@ -76,5 +68,26 @@ User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
 PowerShell Command
 ```powershell
 Import-Module "C:\repos\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
-Resize-CloudPCs -CloudPCBasedUrl "https://canary.graph.microsoft.com/testprodbeta_cpc_int" -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -SourceDataPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleDataForLicenseManagement.CSV" -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All"
+Resize-CloudPCs -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -CloudPCListPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleData\SampleDataForLicenseManagement.CSV"
 ```
+
+Step1: Setup environment, connect to graph
+![ResizeConnectionToGraph](./Image/ResizeConnectionToGraph.png)
+
+Step2 (manually consent): You need to consent to trigger bulk resize action
+![ConsentToTriggerBulkResize](./Image/ConsentToTriggerBulkResize.png)
+
+Step3: Wait all group based license Cloud PCs enter license pending status
+![ResizePending](./Image/ResizePending.png)
+
+Step4 (manually consent): You need to consent to remove the user from the source group
+![ConsentToRemoveUser](./Image/ConsentToRemoveUser.png)
+
+Step5 (manually consent): You need to consent to create a new group and naming for the new group
+![ConsentToCreateNewGroup](./Image/ConsentToCreateNewGroup.png)
+
+Step6 (manually consent): You need to consent to add users to the new group and assign license
+![ConsentToAddUserAndAssignLicense](./Image/ConsentToAddUserAndAssignLicense.png)
+
+Step7: Resize Successfully
+![ResizingSuccess](./Image/ResizingSuccess.png)

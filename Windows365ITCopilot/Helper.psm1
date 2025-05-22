@@ -377,11 +377,20 @@ function Add-MembersToEntraGroup{
     )
     Write-Host $Separator
 
-    # Todo: if user is already add, return
+    # if user is already add, return
+    $groupMemberInfoUrl = $script:ExternalBasedUrl + "/groups/${GroupId}/members"
+    $response = Invoke-MgGraphRequest -Method GET -Uri $groupMemberInfoUrl
+    $addedUserIds = $response.value | ForEach-Object { $_.id }
+    $newUserIds = $UserIds | Where-Object { $_ -notin $addedUserIds }
+
+    if ($newUserIds.Count -eq 0){
+        Wirte-Host "Users have already been added"
+        return
+    }
 
      # Add user to the new group
     $addUserToGroupUrl = $script:ExternalBasedUrl + "/groups/${GroupId}"
-    $directoryObjectUrls = $UserIds | ForEach-Object {
+    $directoryObjectUrls = $newUserIds | ForEach-Object {
         $script:ExternalBasedUrl + "/directoryObjects/$_"
     }  
     $body = @{
@@ -413,7 +422,15 @@ function Remove-MembersFromEntraGroup{
     )
     Write-Host $Separator
 
-    # Todo: if user is already removed, return
+    # if user is already removed, return
+    $groupMemberInfoUrl = $script:ExternalBasedUrl + "/groups/${GroupId}/members"
+    $response = Invoke-MgGraphRequest -Method GET -Uri $groupMemberInfoUrl
+    $existedUserIds = $response.value | ForEach-Object { $_.id }
+
+    if ($existedUserIds -notcontains $UserId){
+        Wirte-Host "User has already been removed"
+        return
+    }
 
     $removeUserUrl = $script:ExternalBasedUrl + "/groups/${GroupId}/members/${UserId}/`$ref"
     Invoke-MgGraphRequest -Method DELETE -Uri $removeUserUrl
