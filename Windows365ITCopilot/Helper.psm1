@@ -26,7 +26,7 @@ function Setup-GraphConfig {
     }
 
     #Command to connect to MS.Graph PowerShell app
-    if ((connect-msgraph -Scopes $Scopes) -eq 1) {
+    if ((connect-msgraph -Scopes $GraphScopes) -eq 1) {
         write-host "Connecting to Graph failed. Exiting..." | out-host
         Return 1
     } 
@@ -206,6 +206,7 @@ function Deprovision-GracePeriodCloudPC {
     $cloudPCStatusUrl = $script:CloudPCBasedUrl + "/deviceManagement/virtualEndpoint/cloudPCs?`$filter=(contains(tolower(managedDeviceName),'$DeviceName')) and servicePlanType eq 'enterprise'&`$top=200&`$count=true&`$select=id,displayName,status,managedDeviceName,userPrincipalName,servicePlanId"
     $response = Invoke-MgGraphRequest -Method GET $cloudPCStatusUrl -OutputType PSObject
     $status = $response.value[0].status
+    $cloudPCId = $response.value[0].id
 
     if ($status -eq "inGracePeriod") {
         $deprovisionCloudPCUrl = $script:CloudPCBasedUrl + "deviceManagement/virtualEndpoint/cloudPCs/${cloudPCId}/endGracePeriod"
@@ -376,6 +377,8 @@ function Add-MembersToEntraGroup{
     )
     Write-Host $Separator
 
+    # Todo: if user is already add, return
+
      # Add user to the new group
     $addUserToGroupUrl = $script:ExternalBasedUrl + "/groups/${GroupId}"
     $directoryObjectUrls = $UserIds | ForEach-Object {
@@ -409,6 +412,8 @@ function Remove-MembersFromEntraGroup{
         [string] $UserId
     )
     Write-Host $Separator
+
+    # Todo: if user is already removed, return
 
     $removeUserUrl = $script:ExternalBasedUrl + "/groups/${GroupId}/members/${UserId}/`$ref"
     Invoke-MgGraphRequest -Method DELETE -Uri $removeUserUrl

@@ -85,6 +85,7 @@ function Reclaim-CloudPCs {
         $cloudPCInfoList | ForEach-Object { Remove-CloudPCLicense -CloudPC $_ }
 
         # Deprovision Cloud PC
+        Write-Output $Separator
         Write-Output "Start to end the grace period CloudPCs, we will derpovision these Cloud PCs. Are you sure you want to continue?"
         $IsUserConsent = Read-Host "[Y] Yes [N] No (default is "N")"
         if ($IsUserConsent -ne "Y"){
@@ -94,9 +95,9 @@ function Reclaim-CloudPCs {
         # Wait all Cloud PCs enter grace period status
         Write-Output $Separator
         Write-Output "Wait all Cloud PCs enter grace period status"
-        Show-SleepProgress -Duration 120
+        Show-SleepProgress -Duration 60
 
-        $cloudPCInfoList | ForEach-Object { Deprovision-GracePeriodCloudPC -DeviceName $_.CloudPCName }
+        $cloudPCInfoList | ForEach-Object { Deprovision-GracePeriodCloudPC -DeviceName $_.DeviceName }
 
         Write-Output $Separator
         Write-Output "✅ Successfully recliam license for all the CloudPCs"
@@ -217,6 +218,21 @@ function Resize-CloudPCs {
             }
         }
 
+        # Remove the users from the source group
+        Write-Host "Start to remove the users from the source group this may cause the user to lose existing permissions. Are you sure you want to continue?"
+        $IsUserConsent = Read-Host "[Y] Yes [N] No (default is "N")"
+        if ($IsUserConsent -ne "Y"){
+            return
+        }
+
+        $groupedDeviceList = $groupBasedLicenseDeivceList | Group-Object -Property UserId, LisenceAssignedGroupId
+        foreach($groudedDevice in $groupedDeviceList){
+            $useId = $groudedDevice.Name.Split(',')[0].Trim()
+            $lisenceAssignedGroupId = $groudedDevice.Name.Split(',')[1].Trim()
+
+            Remove-MembersFromEntraGroup -GroupId $lisenceAssignedGroupId -UserId $useId
+        }
+
         $groupedDeviceList = $groupBasedLicenseDeivceList | Group-Object -Property TargetServicePlanId
         foreach ($group in $groupedDeviceList){
             $targetServicePlan = $group.Name.Split(',')[0].Trim()
@@ -261,21 +277,6 @@ function Resize-CloudPCs {
 
                 Bind-EntraGroupToProvisioningPolicy -GroupId $createdGroupId -PolicyId $policyId
             }
-        }
-
-        # Remove the users from the source group
-        Write-Host "Start to remove the users from the source group this may cause the user to lose existing permissions. Are you sure you want to continue?"
-        $IsUserConsent = Read-Host "[Y] Yes [N] No (default is "N")"
-        if ($IsUserConsent -ne "Y"){
-            return
-        }
-
-        $groupedDeviceList = $groupBasedLicenseDeivceList | Group-Object -Property UserId, LisenceAssignedGroupId
-        foreach($groudedDevice in $groupedDeviceList){
-            $useId = $groudedDevice.Name.Split(',')[0].Trim()
-            $lisenceAssignedGroupId = $groudedDevice.Name.Split(',')[1].Trim()
-
-            Remove-MembersFromEntraGroup -GroupId $lisenceAssignedGroupId -UserId $useId
         }
 
         Write-Host "✅ Successfully resize for all the CloudPCs"

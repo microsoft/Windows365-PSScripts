@@ -30,6 +30,18 @@ User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
 
 #### Example
 
+PowerShell Command
+```powershell
+Import-Module "C:\repos\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
+Reclaim-CloudPCs -CloudPCBasedUrl "https://canary.graph.microsoft.com/testprodbeta_cpc_int" -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -SourceDataPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleDataForLicenseManagement.CSV" -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All"
+```
+
+Step1
+![ReclaimConnectionToGraph](./Image/ReclaimConnectionToGraph.png)
+
+![ConsentToRemoveLicense](./Image/ConsentToRemoveLicense.png)
+
+![WaitToGracePeriodStatus](./Image/WaitToGracePeriodStatus.png)
 
 ### Reclaim-CloudPCs
 This function is used to reclaim Enterprise Cloud PCs, including those assigned licenses directly as well as those managed through group-based licensing.
@@ -52,3 +64,8 @@ The required graph permissions
 User.ReadWrite.All, CloudPC.ReadWrite.All, Group.ReadWrite.All
 
 #### Example
+PowerShell Command
+```powershell
+Import-Module "C:\repos\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
+Resize-CloudPCs -CloudPCBasedUrl "https://canary.graph.microsoft.com/testprodbeta_cpc_int" -TenantId "633fc03f-56d0-459c-a1b5-ab5083fc35d4" -SourceDataPath "C:\repos\Windows365-PSScripts\Windows365ITCopilot\SampleDataForLicenseManagement.CSV" -GraphScopes "CloudPC.ReadWrite.All", "Group.ReadWrite.All", "User.ReadWrite.All"
+```
