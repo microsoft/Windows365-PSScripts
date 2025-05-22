@@ -14,15 +14,20 @@ $script:TenantId = ""
         Setup graph configuration, import the graph module, get the required permission
 #>
 function Setup-GraphConfig {
+    param (
+        [Parameter(Mandatory = $True)]
+        [string[]] $GraphScopes
+    )
+
     #Commands to load MS.Graph modules
     if (invoke-graphmodule -eq 1) {
-        write-output "Invoking Graph failed. Exiting..." | out-host
+        write-host "Invoking Graph failed. Exiting..." | out-host
         Return 1
     }
 
     #Command to connect to MS.Graph PowerShell app
-    if (connect-msgraph -eq 1) {
-        write-output "Connecting to Graph failed. Exiting..." | out-host
+    if ((connect-msgraph -Scopes $Scopes) -eq 1) {
+        write-host "Connecting to Graph failed. Exiting..." | out-host
         Return 1
     } 
 }
@@ -41,32 +46,31 @@ function Setup-GraphConfig {
 function Invoke-GraphModule {
     Write-Host $Separator
 
-    $graphavailable = (find-module -name Microsoft.Graph.Beta)
+    $graphavailable = (find-module -name Microsoft.Graph)
     $vertemp = $graphavailable.version.ToString()
-    Write-Output "Latest version of Microsoft.Graph module is $vertemp" | out-host
-    $graphcurrent = (get-installedmodule -name Microsoft.Graph.Beta -ErrorAction SilentlyContinue) 
+    Write-host "Latest version of Microsoft.Graph module is $vertemp" | out-host
+    $graphcurrent = (get-installedmodule -name Microsoft.Graph -ErrorAction SilentlyContinue) 
 
     if ($graphcurrent -eq $null) {
-        write-output "Microsoft.Graph module is not installed. Installing..." | out-host
+        write-host "Microsoft.Graph module is not installed. Installing..." | out-host
         try {
-            #Install-Module Microsoft.Graph -Force -ErrorAction Stop
-            Install-Module -Name Microsoft.Graph.Beta -Force -ErrorAction Stop
+            Install-Module -Name Microsoft.Graph -Force -ErrorAction Stop
         }
         catch {
-            write-output "Failed to install Microsoft.Graph Module" | out-host
-            write-output $_.Exception.Message | out-host
+            write-host "Failed to install Microsoft.Graph Module" | out-host
+            write-host $_.Exception.Message | out-host
             Return 1
         }
     }
-    $graphcurrent = (get-installedmodule -name Microsoft.Graph.Beta)
+    $graphcurrent = (get-installedmodule -name Microsoft.Graph)
     $vertemp = $graphcurrent.Version.ToString() 
-    write-output "Current installed version of Microsoft.Graph module is $vertemp" | out-host
+    write-host "Current installed version of Microsoft.Graph module is $vertemp" | out-host
 
     if ($graphavailable.Version -gt $graphcurrent.Version) { 
         write-host "There is an update to this module available." 
     }
     else { 
-        write-output "The installed Microsoft.Graph module is up to date." | out-host 
+        write-host "The installed Microsoft.Graph module is up to date." | out-host 
     }
 }
 
@@ -81,24 +85,29 @@ function Invoke-GraphModule {
         Get the required permission
 #>
 function Connect-Msgraph {
+    param (
+        [Parameter(Mandatory = $True)]
+        [string[]] $Scopes
+    )
+
     Write-Host $Separator
 
     $tenant = get-mgcontext
     if ($tenant.TenantId -eq $null) {
-        write-output "Not connected to MS Graph. Connecting..." | out-host
+        write-host "Not connected to MS Graph. Connecting..." | out-host
         try {
-            Connect-MgGraph -Scopes "User.ReadWrite.All", "CloudPC.ReadWrite.All", "Group.ReadWrite.All" -TenantId $script:TenantId -ErrorAction Stop | Out-Null
+            Connect-MgGraph -Scopes $Scopes -TenantId $script:TenantId -ErrorAction Stop | Out-Null
         }
         catch {
-            write-output "Failed to connect to MS Graph" | out-host
-            write-output $_.Exception.Message | out-host
+            write-host "Failed to connect to MS Graph" | out-host
+            write-host $_.Exception.Message | out-host
             Return 1
         }   
     }
     $tenant = get-mgcontext
     $text = "Tenant ID is " + $tenant.TenantId
-    Write-Output "Connected to Microsoft Graph" | out-host
-    Write-Output $text | out-host
+    Write-host "Connected to Microsoft Graph" | out-host
+    Write-host $text | out-host
 }
 
 #####################################################################################################
@@ -118,59 +127,17 @@ function Connect-Msgraph {
 function Setup-EnvironmentConfig {
     param (
         [Parameter(Mandatory = $True)]
-        [string] $CloudPCBasedUrl
+        [string] $CloudPCBasedUrl,
         [string] $TenantId
     )
 
     Write-Host $Separator
 
     $script:CloudPCBasedUrl = $CloudPCBasedUrl
-    Write-Output "Setup CloudPCBasedUr: $CloudPCBasedUrl"
+    Write-Host "Setup CloudPCBasedUr: $CloudPCBasedUrl"
 
     $script:TenantId = $TenantId
-    Write-Output "Setup TenantId: $TenantId"
-}
-
-#####################################################################################################
-# Validate-ReclaimedCloudPC
-#####################################################################################################
-
-<#
-    .SYNOPSIS
-         Validate-ReclaimedCloudPC
-    .DESCRIPTION
-        Validate the reclaimed Cloud PC has the required properties
-    .PARAMETER CloudPC
-        The reclaimed CloudPC
-#>
-function Validate-ReclaimedCloudPC {
-    param (
-        [Parameter(Mandatory = $True)]
-        [PSCustomObject] $CloudPC
-    )
-
-    return 1
-}
-
-#####################################################################################################
-# Validate-ResizedCloudPC
-#####################################################################################################
-
-<#
-    .SYNOPSIS
-        Validate-ResizedCloudPC
-    .DESCRIPTION
-        Validate the resized Cloud PC has the required properties
-    .PARAMETER CloudPC
-        The resized CloudPC
-#>
-function Validate-ResizedCloudPC {
-    param (
-        [Parameter(Mandatory = $True)]
-        [PSCustomObject] $CloudPC
-    )
-
-    return 1
+    Write-Host "Setup TenantId: $TenantId"
 }
 
 #####################################################################################################
@@ -194,9 +161,9 @@ function Remove-CloudPCLicense{
     Write-Host $Separator
 
     $deviceName = $CloudPC.DeviceName
-    $skuId = $CloudPC.SkuId
+    $skuId = $CloudPC.SourceSkuId
     $userId = $CloudPC.UserId
-    $groupId = $CloudPC.AssignedGroupId
+    $groupId = $CloudPC.LisenceAssignedGroupId
 
     if (-not $groupId){
         # Reclaim direct assigned license
@@ -210,10 +177,11 @@ function Remove-CloudPCLicense{
     } else{
         # Reclaim group based license
         $removeUserUrl = $script:ExternalBasedUrl + "/groups/${groupId}/members/${userId}/`$ref"
+
         Invoke-MgGraphRequest -Method DELETE -Uri $removeUserUrl -OutputType PSObject
     }
 
-    Write-Output "✅ Successfully recliam license for device: $deviceName"
+    Write-Host "✅ Successfully recliam license for device: $deviceName"
 }
 
 #####################################################################################################
@@ -228,7 +196,7 @@ function Remove-CloudPCLicense{
     .PARAMETER DeviceName
         The name of the Cloud PC
 #>
-function Deprovision-GracePeriodCloudPC{
+function Deprovision-GracePeriodCloudPC {
     param (
         [Parameter(Mandatory = $True)]
         [string] $DeviceName
@@ -249,6 +217,36 @@ function Deprovision-GracePeriodCloudPC{
 }
 
 #####################################################################################################
+# Check-CloudPCByStatus
+#####################################################################################################
+
+<#
+    .SYNOPSIS
+        Check-CloudPCByStatus
+    .DESCRIPTION
+        Check-CloudPCByStatus
+    .PARAMETER DeviceName
+        The name of the Cloud PC
+    .PARAMETER Status
+        The status of the Cloud PC
+#>
+function Check-CloudPCByStatus {
+    param (
+        [Parameter(Mandatory = $True)]
+        [string] $DeviceName,
+        [string] $Status
+    )
+
+    $cloudPCStatusUrl = $script:CloudPCBasedUrl + "/deviceManagement/virtualEndpoint/cloudPCs?`$filter=(contains(tolower(managedDeviceName),'$DeviceName')) and servicePlanType eq 'enterprise'&`$top=200&`$count=true&`$select=id,displayName,status,managedDeviceName,userPrincipalName,servicePlanId"
+    $response = Invoke-MgGraphRequest -Method GET $cloudPCStatusUrl -OutputType PSObject
+    $actualStatus = $response.value[0].status
+
+    if ($actualStatus -ne $Status){
+        return 1
+    }
+}
+
+#####################################################################################################
 # Start-BulkResize
 #####################################################################################################
 
@@ -265,7 +263,7 @@ function Deprovision-GracePeriodCloudPC{
 function Start-BulkResize{
     param (
         [Parameter(Mandatory = $True)]
-        [string[]] $CloudPCIds
+        [string[]] $CloudPCIds,
         [string] $TargetServicePlanId
     )
     Write-Host $Separator
@@ -283,7 +281,7 @@ function Start-BulkResize{
 
     Invoke-MgGraphRequest -Method POST -Uri $bulkResizeUrl -Body $body
 
-    Write-Output "Successfully to trigger resize flow, the bulk action name is: $bulkActionName"
+    Write-Host "Successfully to trigger resize flow, the bulk action name is: $bulkActionName"
 }
 
 #####################################################################################################
@@ -303,7 +301,7 @@ function Start-BulkResize{
 function Validate-CloudPCStatus{
     param (
         [Parameter(Mandatory = $True)]
-        [string[]] $CloudPCIds
+        [string[]] $CloudPCIds,
         [string] $TargetServicePlanId
     )
     Write-Host $Separator
@@ -311,15 +309,15 @@ function Validate-CloudPCStatus{
     $validateBulkResizeUrl = $script:CloudPCBasedUrl + "/deviceManagement/virtualEndpoint/cloudPCs/validateBulkResize"
     $body = @{
         cloudPcIds = @($CloudPCIds)
-        ServicePlanId = $TargetServicePlanId
+        targetServicePlanId = $TargetServicePlanId
     } | ConvertTo-Json
 
     $response = Invoke-MgGraphRequest -Method POST -Uri $validateBulkResizeUrl -Body $body
 
     foreach ($validateStatus in $response.value){
-        $id = $validateStatus.cloudPcId
         if ($validateStatus.validationResult -ne "success"){
-            Write-Error "Unable to resize CloudPC, Reason: $validateStatus.validationResult, please make sure you input the valid CloudPCs."
+            $reason = $validateStatus.validationResult
+            Write-Error "Unable to resize CloudPC, Reason: $reason, please make sure you input the valid CloudPCs."
             return 1
         }
     }
@@ -334,15 +332,12 @@ function Validate-CloudPCStatus{
         Create-EntraGroup
     .DESCRIPTION
         Create a new entra group
-    .PARAMETER GroupName
-        The group name for the new entra group       
 #>
 function Create-EntraGroup{
-    param (
-        [Parameter(Mandatory = $True)]
-        [string] $GroupName
-    )
+
     Write-Host $Separator
+
+    $GroupName = Read-Host "Please input the new Group name"
    
     $createGroupUrl = $script:ExternalBasedUrl + "/groups"
     $body = @{
@@ -354,7 +349,7 @@ function Create-EntraGroup{
                 
     $response = Invoke-MgGraphRequest -Method POST -Uri $createGroupUrl -Body $body
 
-    Write-Output "Successfully create a new group: $groupName"
+    Write-Host "Successfully create a new group: $GroupName"
 
     return $response.id
 }
@@ -376,7 +371,7 @@ function Create-EntraGroup{
 function Add-MembersToEntraGroup{
     param (
         [Parameter(Mandatory = $True)]
-        [string] $GroupId
+        [string] $GroupId,
         [string[]] $UserIds
     )
     Write-Host $Separator
@@ -410,12 +405,12 @@ function Add-MembersToEntraGroup{
 function Remove-MembersFromEntraGroup{
     param (
         [Parameter(Mandatory = $True)]
-        [string] $GroupId
+        [string] $GroupId,
         [string] $UserId
     )
     Write-Host $Separator
 
-    $removeUserUrl = $script:ExternalBasedUrl + "/groups/${$GroupId}/members/${UserId}/`$ref"
+    $removeUserUrl = $script:ExternalBasedUrl + "/groups/${GroupId}/members/${UserId}/`$ref"
     Invoke-MgGraphRequest -Method DELETE -Uri $removeUserUrl
 }
 
@@ -436,7 +431,7 @@ function Remove-MembersFromEntraGroup{
 function Assign-LicenseToEntraGroup{
     param (
         [Parameter(Mandatory = $True)]
-        [string] $GroupId
+        [string] $GroupId,
         [string] $SkuId
     )
     Write-Host $Separator
@@ -452,7 +447,7 @@ function Assign-LicenseToEntraGroup{
         removeLicenses = @()
     } | ConvertTo-Json -Depth 3
 
-    Invoke-MgGraphRequest -Method POST -Uri $assignLicenseUrl -Body $body
+    $response = Invoke-MgGraphRequest -Method POST -Uri $assignLicenseUrl -Body $body
 }
 
 #####################################################################################################
@@ -472,7 +467,7 @@ function Assign-LicenseToEntraGroup{
 function Bind-EntraGroupToProvisioningPolicy{
     param (
         [Parameter(Mandatory = $True)]
-        [string] $GroupId
+        [string] $GroupId,
         [string] $PolicyId
     )
     Write-Host $Separator
@@ -492,9 +487,36 @@ function Bind-EntraGroupToProvisioningPolicy{
             }
         }
         $body = @{
-            signments = $assignments
+            assignments = $assignments
         } | ConvertTo-Json -Depth 3
+
         $response = Invoke-MgGraphRequest -Method POST -Uri $assignPolicyToGroupUrl -Body $body
     }
+}
+
+#####################################################################################################
+# Show-SleepProgress
+#####################################################################################################
+
+<#
+    .SYNOPSIS
+        Show-SleepProgress
+    .DESCRIPTION
+        Show the progress of the sleep process
+    .PARAMETER Duration
+        The sleep duration
+#>
+function Show-SleepProgress {
+    param (
+        [int]$Duration
+    )
+
+    for ($i = 1; $i -le $Duration; $i++) {
+        $percentComplete = ($i / $Duration) * 100
+        Write-Progress -Activity "Waitting..." -Status "$i s / $Duration s" -PercentComplete $percentComplete
+        Start-Sleep -Seconds 1
+    }
+
+    Write-Progress -Activity "Complete" -Completed
 }
 

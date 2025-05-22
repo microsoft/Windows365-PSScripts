@@ -15,7 +15,7 @@
     [string]$ProvisionPolicyId
 
     [ValidateNotNullOrEmpty()]
-    [string]$SkuId
+    [string]$SourceSkuId
 
     [ValidateNotNullOrEmpty()]
     [string]$SourceServicePlanId
@@ -24,6 +24,8 @@
     [string]$GroupId
 
     [string]$TargetServicePlanId    
+
+    [string]$TargetSkuId
 
     [string]$LisenceAssignedGroupId
 
@@ -35,7 +37,8 @@
         [string]$SourceServicePlanId,
         [string]$TargetServicePlanId,
         [string]$ProvisionPolicyId,
-        [string]$SkuId,
+        [string]$SourceSkuId,
+        [string]$TargetSkuId,
         [string]$GroupId,
         [string]$LisenceAssignedGroupId
     ) {
@@ -46,7 +49,8 @@
         $this.ProvisionPolicyId = $ProvisionPolicyId
         $this.SourceServicePlanId = $SourceServicePlanId
         $this.TargetServicePlanId = $TargetServicePlanId
-        $this.SkuId = $SkuId
+        $this.SourceSkuId = $SourceSkuId
+        $this.TargetSkuId = $TargetSkuId
         $this.GroupId = $GroupId
         $this.LisenceAssignedGroupId = $LisenceAssignedGroupId
     }
