@@ -209,7 +209,7 @@ function Deprovision-GracePeriodCloudPC {
     $cloudPCId = $response.value[0].id
 
     if ($status -eq "inGracePeriod") {
-        $deprovisionCloudPCUrl = $script:CloudPCBasedUrl + "deviceManagement/virtualEndpoint/cloudPCs/${cloudPCId}/endGracePeriod"
+        $deprovisionCloudPCUrl = $script:CloudPCBasedUrl + "/deviceManagement/virtualEndpoint/cloudPCs/${cloudPCId}/endGracePeriod"
         Invoke-MgGraphRequest -Method POST $deprovisionCloudPCUrl -OutputType PSObject
         Write-Output "✅ Successfully deprovisioned device: $DeviceName"
     } else {

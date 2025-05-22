@@ -37,11 +37,20 @@ Reclaim-CloudPCs -CloudPCBasedUrl "https://canary.graph.microsoft.com/testprodbe
 ```
 
 Step1
+Setup environment, connect to graph
 ![ReclaimConnectionToGraph](./Image/ReclaimConnectionToGraph.png)
 
+Step2
+Consent to remove licnenses
 ![ConsentToRemoveLicense](./Image/ConsentToRemoveLicense.png)
 
+Step3
+Wait for All the Cloud PCs enter into grace period status and start deprovision Cloud PCs
 ![WaitToGracePeriodStatus](./Image/WaitToGracePeriodStatus.png)
+
+Step4
+Success to depovision CloudPCs
+![DeprovisionSuccess.png](./Image/DeprovisionSuccess.png.png)
 
 ### Reclaim-CloudPCs
 This function is used to reclaim Enterprise Cloud PCs, including those assigned licenses directly as well as those managed through group-based licensing.
