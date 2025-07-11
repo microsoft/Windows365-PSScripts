@@ -27,11 +27,23 @@ The path of a csv file which contains a list of Cloud PCs to be resized
 CloudPC.ReadWrite.All, Group.ReadWrite.All
 
 #### Example
-Below is an example of how to use the `Manage-EntraGroupForResize` function to manage the group for resizing Cloud PCs. Before running the script, please replace `{The directory of your downloaded files}` with the actual path where you have downloaded the Windows365-PSScripts.
+Below is an example of how to use the `Manage-EntraGroupForResize` function to manage the group for resizing Cloud PCs. 
+
+1. Open the Windows PowerShell console as an **administrator**.
+
+2. Copy the following PowerShell command and paste it into the console.
+
+3. **Replace** {{The directory of your downloaded PowerShell scripts}} with the actual path where you have downloaded the Windows365-PSScripts.
+
+4. **Replace** {{The directory of your downloaded csv files}} with the actual path where you have downloaded the csv file from Intune portal.
+
+5. **Replace** {{The name of your downloaded csv file}} with the actual name of your downloaded csv file.
+
+6. Click **Enter** key to run the PowerShell command.
 
 ```powershell
-Import-Module "{The directory of your downloaded files}\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
-Manage-EntraGroupForResize -TenantId "tenantId" -CloudPCListPath "$rootPath\Windows365-PSScripts\Windows365ITCopilot\SampleData\SampleDataForLicenseManagement.CSV" -CloudPCBasedUrl "https://graph.microsoft.com"
+Import-Module "{The directory of your downloaded PowerShell scripts}\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
+Manage-EntraGroupForResize -TenantId "{The tenantId}" -CloudPCListPath "{The directory of your downloaded csv files}\{The name of your downloaded csv file}.CSV" -CloudPCBasedUrl "https://graph.microsoft.com"
 ```
 
 Step 1: Invoke the script to manage the group for resizing
@@ -64,15 +76,26 @@ The path of a csv file which contains a list of Cloud PCs to be reclaimed
 Group.ReadWrite.All, User.ReadWrite.All
 
 #### Example
-Below is an example of how to use the `Reclaim-CloudPCs` function to reclaim licenses for Cloud PCs. Before running the script, please replace `{The directory of your downloaded files}` with the actual path where you have downloaded the Windows365-PSScripts.
+Below is an example of how to use the `Reclaim-CloudPCs` function to reclaim licenses for Cloud PCs. 
+1. Open the Windows PowerShell console as an **administrator**.
+
+2. Copy the following PowerShell command and paste it into the console.
+
+3. **Replace** {{The directory of your downloaded PowerShell scripts}} with the actual path where you have downloaded the Windows365-PSScripts.
+
+4. **Replace** {{The directory of your downloaded csv files}} with the actual path where you have downloaded the csv file from Intune portal.
+
+5. **Replace** {{The name of your downloaded csv file}} with the actual name of your downloaded csv file.
+
+6. Click **Enter** key to run the PowerShell command.
 
 ```powershell
-Import-Module "{The directory of your downloaded files}\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
-Reclaim-CloudPCs -TenantId "tenantId" -CloudPCListPath "$rootPath\Windows365-PSScripts\Windows365ITCopilot\SampleData\SampleDataForLicenseManagement.CSV" -CloudPCBasedUrl "https://graph.microsoft.com"
+Import-Module "{The directory of your downloaded PowerShell scripts}\Windows365-PSScripts\Windows365ITCopilot\LicenseManagement.psm1" -Force
+Reclaim-CloudPCs -TenantId "{The tenantId}" -CloudPCListPath "{The directory of your downloaded csv files}\{The name of your downloaded csv file}.CSV" -CloudPCBasedUrl "https://graph.microsoft.com"
 ```
 
 Step 1: Invoke the PowerShell script to reclaim the Cloud PCs licenses
-![InvokeSriptToReclaim](./Image/InvokeSriptToReclaim.png)
+![InvokeSriptToReclaim](./Image/InvokeScriptToReclaim.png)
 
 Step 2: Review the detailed steps that the script will perform and consent to proceed
 ![ReviewScriptToReclaim](./Image/ReviewScriptToReclaim.png)

@@ -140,7 +140,7 @@ function Setup-EnvironmentConfig {
     Write-Host $Separator
 
     $script:CloudPCBasedUrl = $CloudPCBasedUrl
-    Write-Host "Setup CloudPCBasedUr: $CloudPCBasedUrl"
+    Write-Host "Setup CloudPCBasedUrl: $CloudPCBasedUrl"
 
     $script:TenantId = $TenantId
     Write-Host "Setup TenantId: $TenantId"
@@ -342,7 +342,7 @@ function Validate-CloudPCStatus{
     .SYNOPSIS
         Create-EntraGroup
     .DESCRIPTION
-        Create a new entra group
+        Create a new Entra group
 #>
 function Create-EntraGroup{
     param (
@@ -376,11 +376,11 @@ function Create-EntraGroup{
     .SYNOPSIS
         Add-MembersToEntraGroup
     .DESCRIPTION
-        Add the users to an entra group
+        Add the users to an Entra group
     .PARAMETER GroupId
-        The group id for the new entra group   
+        The group id for the new Entra group   
     .PARAMETER UserIds
-        The users' ids that need to be added in the entra group   
+        The users' ids that need to be added in the Entra group   
 #>
 function Add-MembersToEntraGroup{
     param (
@@ -421,11 +421,11 @@ function Add-MembersToEntraGroup{
     .SYNOPSIS
         Remove-MembersFromEntraGroup
     .DESCRIPTION
-        Remove the users from the entra group
+        Remove the users from the Entra group
     .PARAMETER GroupId
-        The group id for the entra group
+        The group id for the Entra group
     .PARAMETER UserId
-        The user id that need to be remvoed from the entra group
+        The user id that need to be removed from the Entra group
 #>
 function Remove-MembersFromEntraGroup{
     param (
@@ -458,9 +458,9 @@ function Remove-MembersFromEntraGroup{
     .SYNOPSIS
         Get CloudPC basic information
     .DESCRIPTION
-        Assign a license to an entra group
+        Assign a license to an Entra group
     .PARAMETER GroupId
-        The group id for the entra group
+        The group id for the Entra group
     .PARAMETER SkuId
         The Sku id for the assigned license
 #>
@@ -494,9 +494,9 @@ function Assign-LicenseToEntraGroup{
     .SYNOPSIS
         Bind-EntraGroupToProvisioningPolicy
     .DESCRIPTION
-        Bind the entra group to an provisioning policy
+        Bind the Entra group to an provisioning policy
     .PARAMETER GroupId
-        The group id for the entra group
+        The group id for the Entra group
     .PARAMETER PolicyId
         The policy id of the an provisioning policy
 #>
@@ -611,7 +611,7 @@ function Summarize-ResizeSteps {
     $sheet = $groupBasedLicenseDeivceList | Select-Object @{Name='Group name'; Expression={ $_.LicenseAssignedGroupName }}, @{Name='User name'; Expression={ $_.UserPrincipalName }} | Format-Table -AutoSize | Out-String        
     Write-Host $sheet
 
-    Write-Host "`n2. Create new entra groups, this step requires you to name the new groups."
+    Write-Host "`n2. Create new Entra groups, this step requires you to name the new groups."
     $UseDefaultName = Read-Host "Would you like to use the default name for the new groups (The example name looks like: Resize_2vCPU/8GB/256GB_2025-06-24T21)? [Y] Yes [N] No (default is "N"): "
 
     if ($UseDefaultName -eq "Y") {
@@ -631,15 +631,15 @@ function Summarize-ResizeSteps {
             $groupInfoList += $groupInfo
         }
                 
-        Write-Host "`n3. Move the target users to the new created entra groups as following."
+        Write-Host "`n3. Move the target users to the new created Entra groups as following."
         $sheet = $groupInfoList | Select-Object @{Name='New Group name'; Expression={ $_.GroupName }}, @{Name='User names'; Expression={ $_.UserNames }} | Format-Table -AutoSize | Out-String  
         Write-Host $sheet
 
-        Write-Host "`n4. Assign the target licenses to the new created entra groups as following."
+        Write-Host "`n4. Assign the target licenses to the new created Entra groups as following."
         $sheet = $groupInfoList | Select-Object @{Name='New Group name'; Expression={ $_.GroupName }}, @{Name='Target license'; Expression={ $_.RecommendedSize }} | Format-Table -AutoSize | Out-String
         Write-Host $sheet
 
-        $groupedByPolicyIdList = $groupBasedLicenseDeivceList | Group-Object -Property RecommendedServicePlanId, ProvisioningPolicyId
+        $groupedByPolicyIdList = $groupBasedLicenseDeivceList | Group-Object -Property ProvisioningPolicyId
         $groupPolicyList = @()
         foreach ($group in $groupedByPolicyIdList) {
             $recommendedSize = $group.Group[0].RecommendedSize
@@ -654,22 +654,22 @@ function Summarize-ResizeSteps {
             $groupPolicyList += $groupInfo
         }
 
-        Write-Host "`n5. Assign the origin provisioning policy to the new created entra groups as following."
+        Write-Host "`n5. Assign the origin provisioning policy to the new created Entra groups as following."
         $sheet = $groupPolicyList | Select-Object @{Name='New Group name'; Expression={ $_.GroupName }}, @{Name='Provisioning Policy Name'; Expression={ $_.ProvisioningPolicyName }} | Format-Table -AutoSize | Out-String
         Write-Host $sheet
     } else {
-        Write-Host "`n3. Move the target users to the new created entra groups."
-        Write-Host "`n4. Assign the target licenses to the new created entra groups."
-        Write-Host "`n5. Assign the origin provisioning policy to the new created entra groups."
+        Write-Host "`n3. Move the target users to the new created Entra groups."
+        Write-Host "`n4. Assign the target licenses to the new created Entra groups."
+        Write-Host "`n5. Assign the origin provisioning policy to the new created Entra groups."
     }
 
     return $UseDefaultName
 }
 # SIG # Begin signature block
-# MIIsAAYJKoZIhvcNAQcCoIIr8TCCK+0CAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# MIIr/QYJKoZIhvcNAQcCoIIr7jCCK+oCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAzkBHdxiFivBcH
-# eO8xt4cXenx2K5N75UDcS6wZ6bEtZKCCEW4wggh+MIIHZqADAgECAhM2AAACAO38
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBByz4ZgsBo9OCQ
+# n3Q0+gNkJ+zk+w32qLQocQNgN9LQ26CCEW4wggh+MIIHZqADAgECAhM2AAACAO38
 # jbec3qFIAAIAAAIAMA0GCSqGSIb3DQEBCwUAMEExEzARBgoJkiaJk/IsZAEZFgNH
 # QkwxEzARBgoJkiaJk/IsZAEZFgNBTUUxFTATBgNVBAMTDEFNRSBDUyBDQSAwMTAe
 # Fw0yNDExMDgxMjQzMjhaFw0yNTExMDgxMjQzMjhaMCQxIjAgBgNVBAMTGU1pY3Jv
@@ -762,66 +762,66 @@ function Summarize-ResizeSteps {
 # PjilzpRfRdu20/9UQmC7eVPZ4j1WNa1oqPHfzET3ChIzJ6Q9G3NPCB+7KwX0OQmK
 # yv7IDimj8U/GlsHD1z+EF/fYMf8YXG15LamaOAohsw/ywO6SYSreVW+5Y0mzJutn
 # BC9Cm9ozj1+/4kqksrlhZgR/CSxhFH3BTweH8gP2FEISRtShDZbuYymynY1un+Ry
-# fiK9+iVTLdD1h/SxyxDpZMtimb4CgJQlMYIZ6DCCGeQCAQEwWDBBMRMwEQYKCZIm
+# fiK9+iVTLdD1h/SxyxDpZMtimb4CgJQlMYIZ5TCCGeECAQEwWDBBMRMwEQYKCZIm
 # iZPyLGQBGRYDR0JMMRMwEQYKCZImiZPyLGQBGRYDQU1FMRUwEwYDVQQDEwxBTUUg
 # Q1MgQ0EgMDECEzYAAAIA7fyNt5zeoUgAAgAAAgAwDQYJYIZIAWUDBAIBBQCgga4w
 # GQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisG
-# AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEINfYUhcWmk6Hs8OlT8XiQrEryXntq/Nj
-# MiuwMqYlht2zMEIGCisGAQQBgjcCAQwxNDAyoBSAEgBNAGkAYwByAG8AcwBvAGYA
+# AQQBgjcCARUwLwYJKoZIhvcNAQkEMSIEIHKymgEKoVU+q+dVrC/x8U4kbctyMGPj
+# t7qS5HkwC7b1MEIGCisGAQQBgjcCAQwxNDAyoBSAEgBNAGkAYwByAG8AcwBvAGYA
 # dKEagBhodHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20wDQYJKoZIhvcNAQEBBQAEggEA
-# Amsu4oaS8NgH81oOu3/0/cdE/t0Zc+yLnwpfctE3VP9UZek/M8ePRRaPMpbVOus2
-# ooaygFFA6CHkyULInJXAvVG09jvsdIy7HiX7sQtyJY6JrZU49UOCIa83VrmbDw+d
-# 83GsLeTFoRQ8Tm9qX3p4lLQ2bVOQVwGto3NZ6sjPeqCcO8vMODxoLRZD1tkm0lWU
-# CTy+4zpyPubqDUgzNEkSkb2SzeYwrP536WrAV2solHlyG8RTDU+t8VqufChm07d7
-# zVVgdDVUR1LSE8oL+3BOIumCaS0amRXgKzlnMZTgmRqzQdTYpI8szuiLtFIZwGgi
-# pWwARB6BeBYQK74yyPXJRKGCF7AwghesBgorBgEEAYI3AwMBMYIXnDCCF5gGCSqG
-# SIb3DQEHAqCCF4kwgheFAgEDMQ8wDQYJYIZIAWUDBAIBBQAwggFaBgsqhkiG9w0B
+# G913WDbaOHUBl9sax6Uy4CIPV10nBt9KipXf5XPeoDyc43pGzIcAImvfk9Tss3/N
+# NJQZPBU0aBfdsyqgNLzWIAODC8+i3tHkNJgTMKXah0F+OH9XEpDcZUccrjfMTPsf
+# N1X8QMXhOrcYPx7BlR7+V4Zc0LdLaLRLgu4kpm8+qaZZakI0GhspMwprHIWLsKrs
+# 64m+m2HbuJ4VeGOD46e0aIXrf2rFVteIyc6183GP6HnllQ8nymx8pTMy6ENMSpF7
+# F0xmA03P5D1QddP4xxf8wdt3h1jmOTNOVweK6wtjkaZhX7bqWEqY8OG/r9nywQxv
+# idv06SbxQpfwLyWWPzNESqGCF60wghepBgorBgEEAYI3AwMBMYIXmTCCF5UGCSqG
+# SIb3DQEHAqCCF4YwgheCAgEDMQ8wDQYJYIZIAWUDBAIBBQAwggFaBgsqhkiG9w0B
 # CRABBKCCAUkEggFFMIIBQQIBAQYKKwYBBAGEWQoDATAxMA0GCWCGSAFlAwQCAQUA
-# BCCrCcJqAxL6NX0+uQg5T698rfrA4FFuSBL6vaCtaJ3erwIGaFLm4XZWGBMyMDI1
-# MDcwMjA3MDgzNS4xMTFaMASAAgH0oIHZpIHWMIHTMQswCQYDVQQGEwJVUzETMBEG
+# BCCxMZdw5LjnQpYnt9UXSHTRiCmKHmy/9mJ7MSezwhguAwIGaFMCHErGGBMyMDI1
+# MDcxMTA4MjY1Ni4wMTZaMASAAgH0oIHZpIHWMIHTMQswCQYDVQQGEwJVUzETMBEG
 # A1UECBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWlj
 # cm9zb2Z0IENvcnBvcmF0aW9uMS0wKwYDVQQLEyRNaWNyb3NvZnQgSXJlbGFuZCBP
-# cGVyYXRpb25zIExpbWl0ZWQxJzAlBgNVBAsTHm5TaGllbGQgVFNTIEVTTjo0MzFB
+# cGVyYXRpb25zIExpbWl0ZWQxJzAlBgNVBAsTHm5TaGllbGQgVFNTIEVTTjo1OTFB
 # LTA1RTAtRDk0NzElMCMGA1UEAxMcTWljcm9zb2Z0IFRpbWUtU3RhbXAgU2Vydmlj
-# ZaCCEf4wggcoMIIFEKADAgECAhMzAAAB+vs7RNN3M8bTAAEAAAH6MA0GCSqGSIb3
+# ZaCCEfswggcoMIIFEKADAgECAhMzAAAB9BdGhcDLPznlAAEAAAH0MA0GCSqGSIb3
 # DQEBCwUAMHwxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5ndG9uMRAwDgYD
 # VQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xJjAk
 # BgNVBAMTHU1pY3Jvc29mdCBUaW1lLVN0YW1wIFBDQSAyMDEwMB4XDTI0MDcyNTE4
-# MzExMVoXDTI1MTAyMjE4MzExMVowgdMxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpX
+# MzA1OVoXDTI1MTAyMjE4MzA1OVowgdMxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpX
 # YXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3NvZnQg
 # Q29ycG9yYXRpb24xLTArBgNVBAsTJE1pY3Jvc29mdCBJcmVsYW5kIE9wZXJhdGlv
-# bnMgTGltaXRlZDEnMCUGA1UECxMeblNoaWVsZCBUU1MgRVNOOjQzMUEtMDVFMC1E
+# bnMgTGltaXRlZDEnMCUGA1UECxMeblNoaWVsZCBUU1MgRVNOOjU5MUEtMDVFMC1E
 # OTQ3MSUwIwYDVQQDExxNaWNyb3NvZnQgVGltZS1TdGFtcCBTZXJ2aWNlMIICIjAN
-# BgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAyhZVBM3PZcBfEpAf7fIIhygwYVVP
-# 64USeZbSlRR3pvJebva0LQCDW45yOrtpwIpGyDGX+EbCbHhS5Td4J0Ylc83ztLEb
-# bQD7M6kqR0Xj+n82cGse/QnMH0WRZLnwggJdenpQ6UciM4nMYZvdQjybA4qejOe9
-# Y073JlXv3VIbdkQH2JGyT8oB/LsvPL/kAnJ45oQIp7Sx57RPQ/0O6qayJ2SJrwcj
-# A8auMdAnZKOixFlzoooh7SyycI7BENHTpkVKrRV5YelRvWNTg1pH4EC2KO2bxsBN
-# 23btMeTvZFieGIr+D8mf1lQQs0Ht/tMOVdah14t7Yk+xl5P4Tw3xfAGgHsvsa6ug
-# rxwmKTTX1kqXH5XCdw3TVeKCax6JV+ygM5i1NroJKwBCW11Pwi0z/ki90ZeO6XfE
-# E9mCnJm76Qcxi3tnW/Y/3ZumKQ6X/iVIJo7Lk0Z/pATRwAINqwdvzpdtX2hOJib4
-# GR8is2bpKks04GurfweWPn9z6jY7GBC+js8pSwGewrffwgAbNKm82ZDFvqBGQQVJ
-# wIHSXpjkS+G39eyYOG2rcILBIDlzUzMFFJbNh5tDv3GeJ3EKvC4vNSAxtGfaG/mQ
-# hK43YjevsB72LouU78rxtNhuMXSzaHq5fFiG3zcsYHaa4+w+YmMrhTEzD4SAish3
-# 5BjoXP1P1Ct4Va0CAwEAAaOCAUkwggFFMB0GA1UdDgQWBBRjjHKbL5WV6kd06Koc
-# QHphK9U/vzAfBgNVHSMEGDAWgBSfpxVdAF5iXYP05dJlpxtTNRnpcjBfBgNVHR8E
+# BgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEApwhOE6bQgC9qq4jJGX2A1yoObfk0
+# qetQ8kkj+5m37WBxDlsZ5oJnjfzHspqPiOEVzZ2y2ygGgNZ3/xdZQN7f9A1Wp1Ad
+# h5qHXZZh3SBX8ABuc69Tb3cJ5KCZcXDsufwmXeCj81EzJEIZquVdV8STlQueB/b1
+# MIYt5RKis3uwzdlfSl0ckHbGzoO91YTKg6IExqKYojGreCopnIKxOvkr5VZsj2f9
+# 5Bb1LGEvuhBIm/C7JysvJvBZWNtrspzyXVnuo+kDEyZwpkphsR8Zvdi+s/pQiofm
+# dbW1UqzWlqXQVgoYXbaYkEyaSh/heBtwj1tue+LcuOcHAPgbwZvQLksKaK46oktr
+# egOR4e0icsGiAWR9IL+ny4mlCUNA84F7GEEWOEvibig7wsrTa6ZbzuMsyTi2Az4q
+# PV3QRkFgxSbp4R4OEKnin8Jz4XLI1wXhBhIpMGfA3BT850nqamzSiD5L5px+VtfC
+# i0MJTS2LDF1PaVZwlyVZIVjVHK8oh2HYG9T26FjR9/I85i5ExxmhHpxM2Z+UhJeZ
+# A6Lz452m/+xrA4xrdYas5cm7FUhy24rPLVH+Fy+ZywHAp9c9oWTrtjfIKqLIvYtg
+# Jc41Q8WxbZPR7B1uft8BFsvz2dOSLkxPDLcXWy16ANy73v0ipCxAwUEC9hssi0Ld
+# B8ThiNf/4A+RZ8sCAwEAAaOCAUkwggFFMB0GA1UdDgQWBBQrdGWhCtEsPid1LJzs
+# TaLTKQbfmzAfBgNVHSMEGDAWgBSfpxVdAF5iXYP05dJlpxtTNRnpcjBfBgNVHR8E
 # WDBWMFSgUqBQhk5odHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20vcGtpb3BzL2NybC9N
 # aWNyb3NvZnQlMjBUaW1lLVN0YW1wJTIwUENBJTIwMjAxMCgxKS5jcmwwbAYIKwYB
 # BQUHAQEEYDBeMFwGCCsGAQUFBzAChlBodHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20v
 # cGtpb3BzL2NlcnRzL01pY3Jvc29mdCUyMFRpbWUtU3RhbXAlMjBQQ0ElMjAyMDEw
 # KDEpLmNydDAMBgNVHRMBAf8EAjAAMBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMIMA4G
-# A1UdDwEB/wQEAwIHgDANBgkqhkiG9w0BAQsFAAOCAgEAuFbCorFrvodG+ZNJH3Y+
-# Nz5QpUytQVObOyYFrgcGrxq6MUa4yLmxN4xWdL1kygaW5BOZ3xBlPY7Vpuf5b5ea
-# XP7qRq61xeOrX3f64kGiSWoRi9EJawJWCzJfUQRThDL4zxI2pYc1wnPp7Q695bHq
-# wZ02eaOBudh/IfEkGe0Ofj6IS3oyZsJP1yatcm4kBqIH6db1+weM4q46NhAfAf07
-# 0zF6F+IpUHyhtMbQg5+QHfOuyBzrt67CiMJSKcJ3nMVyfNlnv6yvttYzLK3wS+0Q
-# wJUibLYJMI6FGcSuRxKlq6RjOhK9L3QOjh0VCM11rHM11ZmN0euJbbBCVfQEufOL
-# NkG88MFCUNE10SSbM/Og/CbTko0M5wbVvQJ6CqLKjtHSoeoAGPeeX24f5cPYyTcK
-# lbM6LoUdO2P5JSdI5s1JF/On6LiUT50adpRstZajbYEeX/N7RvSbkn0djD3BvT2O
-# f3Wf9gIeaQIHbv1J2O/P5QOPQiVo8+0AKm6M0TKOduihhKxAt/6Yyk17Fv3RIdjT
-# 6wiL2qRIEsgOJp3fILw4mQRPu3spRfakSoQe5N0e4HWFf8WW2ZL0+c83Qzh3VtEP
-# I6Y2e2BO/eWhTYbIbHpqYDfAtAYtaYIde87ZymXG3MO2wUjhL9HvSQzjoquq+OoU
-# mvfBUcB2e5L6QCHO6qTO7WowggdxMIIFWaADAgECAhMzAAAAFcXna54Cm0mZAAAA
+# A1UdDwEB/wQEAwIHgDANBgkqhkiG9w0BAQsFAAOCAgEA3cHSDxJKUDsgacIfRX60
+# ugODShsBqwtEURUbUXeDmYYSa5oFj34RujW3gOeCt/ObDO45vfpnYG5OS5YowwsF
+# w19giCI6JV+ccG/qqM08nxASbzwWtqtorzQiJh9upsE4TVZeKYXmbyx7WN9tdbVI
+# rCelVj7P6ifMHTSLt6BmyoS2xlC2cfgKPPA13vS3euqUl6zwe7GAhjfjNXjKlE4S
+# NWJvdqgrv0GURKjqmamNvhmSJane6TYzpdDCegq8adlGH85I1EWKmfERb1lzKy5O
+# MO2e9IkAlvydpUun0C3sNEtp0ehliT0Sraq8jcYVDH4A2C/MbLBIwikjwiFGQ4Sl
+# FLT2Tgb4GvvpcWVzBxwDo9IRBwpzngbyzbhh95UVOrQL2rbWHrHDSE3dgdL2yuaH
+# RgY7HYYLs5Lts30wU9Ouh8N54RUta6GFZFx5A4uITgyJcVdWVaN0qjs0eEjwEyNU
+# v0cRLuHWJBejkMe3qRAhvCjnhro7DGRWaIldyfzZqln6FsnLQ3bl+ZvVJWTYJuL+
+# IZLI2Si3IrIRfjccn29X2BX/vz2KcYubIjK6XfYvrZQN4XKbnvSqBNAwIPY2xJeB
+# 4o9PDEFI2rcPaLUyz5IV7JP3JRpgg3xsUqvFHlSG6uMIWjwH0GQIIwrC2zRy+lNZ
+# sOKnruyyHMQTP7jy5U92qEEwggdxMIIFWaADAgECAhMzAAAAFcXna54Cm0mZAAAA
 # AAAVMA0GCSqGSIb3DQEBCwUAMIGIMQswCQYDVQQGEwJVUzETMBEGA1UECBMKV2Fz
 # aGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0IENv
 # cnBvcmF0aW9uMTIwMAYDVQQDEylNaWNyb3NvZnQgUm9vdCBDZXJ0aWZpY2F0ZSBB
@@ -861,44 +861,44 @@ function Summarize-ResizeSteps {
 # fnyhYWxz/gq77EFmPWn9y8FBSX5+k77L+DvktxW/tM4+pTFRhLy/AsGConsXHRWJ
 # jXD+57XQKBqJC4822rpM+Zv/Cuk0+CQ1ZyvgDbjmjJnW4SLq8CdCPSWU5nR0W2rR
 # nj7tfqAxM328y+l7vzhwRNGQ8cirOoo6CGJ/2XBjU02N7oJtpQUQwXEGahC0HVUz
-# WLOhcGbyoYIDWTCCAkECAQEwggEBoYHZpIHWMIHTMQswCQYDVQQGEwJVUzETMBEG
+# WLOhcGbyoYIDVjCCAj4CAQEwggEBoYHZpIHWMIHTMQswCQYDVQQGEwJVUzETMBEG
 # A1UECBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVkbW9uZDEeMBwGA1UEChMVTWlj
 # cm9zb2Z0IENvcnBvcmF0aW9uMS0wKwYDVQQLEyRNaWNyb3NvZnQgSXJlbGFuZCBP
-# cGVyYXRpb25zIExpbWl0ZWQxJzAlBgNVBAsTHm5TaGllbGQgVFNTIEVTTjo0MzFB
+# cGVyYXRpb25zIExpbWl0ZWQxJzAlBgNVBAsTHm5TaGllbGQgVFNTIEVTTjo1OTFB
 # LTA1RTAtRDk0NzElMCMGA1UEAxMcTWljcm9zb2Z0IFRpbWUtU3RhbXAgU2Vydmlj
-# ZaIjCgEBMAcGBSsOAwIaAxUA94Z+bUJn+nKwBvII6sg0Ny7aPDaggYMwgYCkfjB8
+# ZaIjCgEBMAcGBSsOAwIaAxUAv+LZ/Vg0s17Xek4iG9R9c/7+AI6ggYMwgYCkfjB8
 # MQswCQYDVQQGEwJVUzETMBEGA1UECBMKV2FzaGluZ3RvbjEQMA4GA1UEBxMHUmVk
 # bW9uZDEeMBwGA1UEChMVTWljcm9zb2Z0IENvcnBvcmF0aW9uMSYwJAYDVQQDEx1N
-# aWNyb3NvZnQgVGltZS1TdGFtcCBQQ0EgMjAxMDANBgkqhkiG9w0BAQsFAAIFAOwP
-# MK4wIhgPMjAyNTA3MDIwNDE0MzhaGA8yMDI1MDcwMzA0MTQzOFowdzA9BgorBgEE
-# AYRZCgQBMS8wLTAKAgUA7A8wrgIBADAKAgEAAgIYXQIB/zAHAgEAAgIUAjAKAgUA
-# 7BCCLgIBADA2BgorBgEEAYRZCgQCMSgwJjAMBgorBgEEAYRZCgMCoAowCAIBAAID
-# B6EgoQowCAIBAAIDAYagMA0GCSqGSIb3DQEBCwUAA4IBAQAuIoGoFFwcoUdVdcak
-# cb6DpTB5Me23S8lJ/PlzpoCTfDartjbySVI3AJxFXM0PxllJvy92fhf1wIZgeQS+
-# D+YG5wUHNagad5XPhZ88T7+mNwXMWDRAQVkin73Y/ZYnhkZ1wdMdOX74rDVCvrrW
-# VMPKcDagVR7xlXSuWAWbcr+YOmtC3VPYdA2K5lTY5GUZYzjPw6OowZe8AWAd8qJY
-# 7LM0GTicUkcaP1uvFhI4bZxKh8zbSgAs2/nHyR1CapK1ycwuNol3s/yRMCJBDWc4
-# sHvu2kHE+Mv1fmzjYjKg75+lVWkeXFskt/WVx2Mj7tl2mMZYCyccaVtdjM1OLH1q
-# fl7bMYIEDTCCBAkCAQEwgZMwfDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hp
-# bmd0b24xEDAOBgNVBAcTB1JlZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jw
-# b3JhdGlvbjEmMCQGA1UEAxMdTWljcm9zb2Z0IFRpbWUtU3RhbXAgUENBIDIwMTAC
-# EzMAAAH6+ztE03czxtMAAQAAAfowDQYJYIZIAWUDBAIBBQCgggFKMBoGCSqGSIb3
-# DQEJAzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQgwKtOg+YmeK1nK/4v
-# rgQ5ymZ+aWTf4uoH9mAFO2XknJcwgfoGCyqGSIb3DQEJEAIvMYHqMIHnMIHkMIG9
-# BCB98n8tya8+B2jjU/dpJRIwHwHHpco5ogNStYocbkOeVjCBmDCBgKR+MHwxCzAJ
-# BgNVBAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25k
-# MR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xJjAkBgNVBAMTHU1pY3Jv
-# c29mdCBUaW1lLVN0YW1wIFBDQSAyMDEwAhMzAAAB+vs7RNN3M8bTAAEAAAH6MCIE
-# INgnm6CBSupi4GyFPcgDMXFJQdvNcsEYz8Sl6EOE4rOGMA0GCSqGSIb3DQEBCwUA
-# BIICACFFjg2VaGa0Sxtdt0IXmmTQE/zj4zsKWWrTBC89ZsGubsMo7DlDAKtYu1BB
-# tEz6PHzi60Wf7ZQeN65/SMCyMBWme4l4+nNT4pxu3Rb6nV8W2mfSz+31JZSQCfYe
-# ojdoU4aXHAULQYoXiu1pSBbWYBxuDr2aZk3O4kMWXBlnYHqIfeTz4y6r+ZjhJly9
-# OSpruA0BxgtP81JJ+1Tg3r9+fdCxdNOJLRSLENFqAQ+wnlJ55avT60ZREvyolHS7
-# +aQUvR12KolBV1KqSQA+Szg1FGAGDf7+PeFQ7oeR1lxg/XU3s99UlKzVenblQCDd
-# xTcKow7EP6rMdPiWYX4q2QHyJSzV1Eb0nUCq7c6uOkQHWZUqJJZnPUn7wF8O1Yv5
-# FlRHgnKMYTDpcbocZqYQbVmKaqo+OqYbBez8fEzIUrOQAkQpXMWvB7WSZPLz3Wz9
-# Grhs7ph6DYKmj8e3vwU2CKFUUkyMIEuqxbD+f1G/v2l//AKfcfTOYy2HT0z2nAfe
-# wv6t6mOv4ua3lReIXcIYgl1rtPy/3cZxXnS8jAt+4IhhebTwYaH/7xxbMtj0XvJY
-# DvkeKev1RLTlPLJWVGjD4ooUwGsHn4oTby6O15oeQ8KrRLki/PdLqXkZNHcoHxXC
-# 0fYZ5W4a6MugqPuYoCYrbgSCqhoKCaZGkWp3LSWNx1Sh5Gee
+# aWNyb3NvZnQgVGltZS1TdGFtcCBQQ0EgMjAxMDANBgkqhkiG9w0BAQsFAAIFAOwb
+# KMAwIhgPMjAyNTA3MTEwNjA4MDBaGA8yMDI1MDcxMjA2MDgwMFowdDA6BgorBgEE
+# AYRZCgQBMSwwKjAKAgUA7BsowAIBADAHAgEAAgICNDAHAgEAAgITTDAKAgUA7Bx6
+# QAIBADA2BgorBgEEAYRZCgQCMSgwJjAMBgorBgEEAYRZCgMCoAowCAIBAAIDB6Eg
+# oQowCAIBAAIDAYagMA0GCSqGSIb3DQEBCwUAA4IBAQAvzZDiyva3qlir0nCMpwUW
+# MDG6cgh62DPVku6BeXRGAJzwoHrU2R5tJYvZnjglNZ1oUJ8B5mZJu0Jtja0LlGLd
+# 3tzRhacjPJ1Zmzb2wBXZ3ojkrCNhJNnxD57sOC0mCfMWQNBt2pdaJPIwE8a24HYa
+# CM4yNkj7S28nyZGrcd30jG1YSvNZoNl5Q90melwOyV07B5BHzdSTPWv+yFTVtCve
+# 7AryVuarrNLsRwO2SXeYjoo25KYARd6PkSW9bqoKA9LtVjPHUIvdBobb6k8NEXug
+# 9RfjYn6CuG7uZCjP+9TKTQAPZ4Dgn38XlcyJZsUfNzkTq5hQaVU3ecqfBEvwBTCp
+# MYIEDTCCBAkCAQEwgZMwfDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0
+# b24xEDAOBgNVBAcTB1JlZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3Jh
+# dGlvbjEmMCQGA1UEAxMdTWljcm9zb2Z0IFRpbWUtU3RhbXAgUENBIDIwMTACEzMA
+# AAH0F0aFwMs/OeUAAQAAAfQwDQYJYIZIAWUDBAIBBQCgggFKMBoGCSqGSIb3DQEJ
+# AzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQgY8vhlL1GkdvDUy0CXEco
+# mnuR0zSirWVUCeQtyajbbxowgfoGCyqGSIb3DQEJEAIvMYHqMIHnMIHkMIG9BCA/
+# WMJ8biaT6njvkknB8Q7hSQIi8ys6vIBvZg60RBjWazCBmDCBgKR+MHwxCzAJBgNV
+# BAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4w
+# HAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xJjAkBgNVBAMTHU1pY3Jvc29m
+# dCBUaW1lLVN0YW1wIFBDQSAyMDEwAhMzAAAB9BdGhcDLPznlAAEAAAH0MCIEILL3
+# ZtGtAegxyFHAI5FlwC6tVmnKzdKMRu/dV9JuWGVsMA0GCSqGSIb3DQEBCwUABIIC
+# AHc53PvbyMFCkyMOwq2U6FxJsnTGsbi6WWwHoJq6VdR21we6x3PfY8kKJkHviqMN
+# fip5X+X0KYAeyPWQEVxFLk/HeDpp8APAXC87NVdk2tECrlkJBYedC9ZmiT6pZtUQ
+# q9wnmcqGZNSOG3DSxdNqDjGnXNin2dQAxO2LIOcP+UbUzzCz4n0fkJjqsqTn59qc
+# ly2ufGcpy02sAEs8Lg/CRkEuYgja1w7WlksfcNe+fplQMgsZnDVarCtzbhXc0vIy
+# ZI8QtRuQ1/Yend71rZHhJsU+KNJ550S3aF78zS3kI9GgOXP3Q9wPw+xPEqDZWOJ4
+# vaMW3XcmT/fuBXMC9s/CFsinq52Mxu/IvjWPHd/fXSZR57az/sHu9P8hqn25GLLz
+# L68ExgvJuG5TczketF9QWgKhIGyuCREoX5mhFKT+txv31Njjts8sR4idlodu+C9a
+# guLtRBqSYDn4f6khjXU73Wgkm3922NjZl60QJBCn1dushtqPc96YjNeYHDBYwhby
+# izeQKVvW1zsDJOJWplMXYB9Ia5asRRfByWE0YX2jXXzyRuFbm2RCCKWs1/6JY77y
+# hJmwtQbtekyjIgfjG3tdIVg3TQIV+B/q3fb5xTzOfYteTerTuDz8hJVJwDjN90uC
+# tils9saokmuvVGJzM3OPUglmbPqD1ybneBTT8FQS/3JD
 # SIG # End signature block
