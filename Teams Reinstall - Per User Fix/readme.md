@@ -1,3 +1,5 @@
+# These scripts are deprecated as the issue has been resolved. 
+
 # Teams Client Installer Fix
 This example script set is intended for use with Proactive Remediation. This package is only intended for use with Windows 365 Enterprise systems. Further modification must be done for it to work with Business SKUs that are not leveraging MEM.  Do not deploy this package to Azure Virtual Desktop multi-session hosts.
 

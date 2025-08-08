@@ -1,3 +1,6 @@
+# This script has been deprecated as the required gateways have been consolidated into subnets.
+For more information on what subnets need to be whitelisted [follow this link](https://techcommunity.microsoft.com/discussions/windows365discussions/optimizing-rdp-connectivity-for-windows-365/3554327)
+
 # Windows 365 and AVD Gateway IP Address Lookup Script
 ## Purpose
 This script helps to easily retrieve the AVD Gateway IPs or CIDR Subnets associated with the Windows 365 and AVD services and outputs them as a list in a CSV format. This list can then be used by admins to import the data into their VPN solutions to minimize end user Cloud PC performance degradation and disconnects. 
