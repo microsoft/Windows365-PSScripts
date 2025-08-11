@@ -1,3 +1,6 @@
+# This script has been deprecated as the feature is now enabled by default.
+For more information on RDP Shortpath, [follow this link](https://learn.microsoft.com/en-us/windows-365/enterprise/rdp-shortpath-public-networks)
+
 # Enable RDP Shortpath with Proactive Remediation
 This example solution comes with two scripts and is intended to enable the RDP Shortpath feature on Windows 365 Cloud PCs. This feature uses UDP packets, which allows for lower latency - enhancing the end user experience.
 
