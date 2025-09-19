@@ -1,46 +1,171 @@
-# Windows 365 - Backup, Restore, and Compare
+# W365-BRC PowerShell Module
 
-This tool is intended to help Windows 365 Administrators protect and manage their Provisioning Policies, Azure Network Connections, and User Settings configurations. The solution achieves this through archiving Windows 365 objects in JSON format, then using those archives to restore the policies and deployments. It can also compare archived policies to current policies in Intune, which can be use for change control processes and preventing configuration drift.
+## Overview
+W365-BRC (Windows 365 Backup, Restore, Compare) is a PowerShell module designed to help manage Windows 365 configurations. This module provides functionality to backup, restore, and compare Windows 365 policies and settings - Provisioning Policies, Azure Network Connections, and User Settings. Use cases for this tool are disaster recovery, dev to prod policy creation, and change control.
 
-## Use Cases
+## Features
+- **Backup**: Export Windows 365 configurations to JSON files
+- **Restore**: Import Windows 365 configurations from JSON backups
+- **Compare**: Compare current configurations with backed up versions
 
-### Backup and Restore
-Backed up Windows 365 objects can be used in the event of accidental deletion of a Provisioning Policy, ANC, or User Settings. Every backup is placed in a unique folder that is named with a timestamp. This gives a functionality very similar to version control. Deployment group names must currently named the same thing in both dev and prod environments.
+## Installation
 
-### Dev / Prod 
-The backups are tenant agnostic which allows for a backup to be restored to any tenant. This is useful for administrators who have separate development and production tenants and want to recreate what was built in Dev into Prod. This eliminates human error when recreating the policies in the production environment. Deployment group names must currently named the same thing in both dev and prod environments.
+### Option 1: Manual Installation
+1. Download or clone this repository
+2. Copy the `W365-BRC` folder to one of the PowerShell module paths:
+   - `$env:USERPROFILE\Documents\PowerShell\Modules` (Current User)
+   - `$env:ProgramFiles\PowerShell\Modules` (All Users)
 
-### Change Control Auditing
-The tool can compare archived policy to current policy and list the differences, which is beneficial for change control scenarios and can prevent configuration drift or misconfigurations.
+### Option 2: Import Directly
+```powershell
+Import-Module "C:\path\to\W365-BRC\W365-BRC.psm1"
+```
 
-## How to use
+## Requirements
+- PowerShell 5.1 or higher
+- Microsoft Graph PowerShell SDK
+- Appropriate permissions for Windows 365 management
 
-Run the script named W365-BRC.ps1 to load the functions into PowerShell. Then use the following three commands.
+## Prerequisites
+Before using this module, ensure you have the Microsoft Graph PowerShell modules installed:
 
-### Backup
+```powershell
+Install-Module Microsoft.Graph -Scope CurrentUser
+```
 
-invoke-W365Backup
+## Functions
 
-Parameters used:
--Object [All, ProvisioningPolicy, AzureNetworkConnection, CustomImages, UserSettings]
--Path [The folder to write the backups to]
+### Invoke-W365Backup
+Creates timestamped backups of Windows 365 configuration objects.
 
-### Restore
+**Syntax:**
+```powershell
+Invoke-W365Backup [-Object] <String> [[-Path] <String>]
+```
 
-invoke-W365Restore
+**Parameters:**
+- `Object`: Specifies which object type to backup
+  - Valid values: "ProvisioningPolicy", "CustomImages", "UserSetting", "AzureNetworkConnection", "All"
+- `Path`: Backup directory path (Default: "c:\W365-Policy-Backup\")
 
-Parameters used:
--Object [All, ProvisioningPolicy, AzureNetworkConnection, CustomImages, UserSettings]
--JSON [Optional. Path to the JSON backup. If not provided, a file picker is displayed]
+**Examples:**
+```powershell
+# Backup all Windows 365 configurations
+Invoke-W365Backup -Object "All"
 
-### Compare
+# Backup only provisioning policies to custom path
+Invoke-W365Backup -Object "ProvisioningPolicy" -Path "C:\MyBackups\"
 
-invoke-W365Compare
+# Backup custom images
+Invoke-W365Backup -Object "CustomImages"
+```
 
-No Parameters are used with this function.
+### Invoke-W365Restore
+Restores Windows 365 configuration objects from JSON backup files.
 
-The user will be presented with an Out-Grid view, asking first for the Object type and then the specific policy. The user will then be presented with a file picker, where they choose which backed up JSON file the previously selected object should be compared to. The result of the comparison will show what is different between the two policy objects.
+**Syntax:**
+```powershell
+Invoke-W365Restore [-Object] <String> [[-JSON] <String>]
+```
 
-## Known limitations
-ANC backup and restore function does not work. GNDN. Coming soon.
-Very Little Error Handling
+**Parameters:**
+- `Object`: Specifies which object type to restore
+  - Valid values: "ProvisioningPolicy", "UserSetting", "AzureNetworkConnection"
+- `JSON`: Path to the JSON backup file (If not specified, a file dialog opens)
+
+**Examples:**
+```powershell
+# Restore a provisioning policy (file dialog will open)
+Invoke-W365Restore -Object "ProvisioningPolicy"
+
+# Restore a user setting from specific file
+Invoke-W365Restore -Object "UserSetting" -JSON "C:\Backup\UserSetting.json"
+```
+
+### Invoke-W365Compare
+Compares current Windows 365 configurations with backup files to identify differences.
+
+**Syntax:**
+```powershell
+Invoke-W365Compare
+```
+
+**Example:**
+```powershell
+# Launch comparison tool
+Invoke-W365Compare
+```
+
+## Required Permissions
+
+The module requires Microsoft Graph API permissions:
+- `CloudPC.Read.All` - For reading Windows 365 configurations
+- `CloudPC.ReadWrite.All` - For modifying Windows 365 configurations
+- `DeviceManagementConfiguration.Read.All` - For reading device management configurations
+
+## Authentication
+
+Before using the module functions, authenticate with Microsoft Graph:
+
+```powershell
+Connect-MgGraph -Scopes "CloudPC.ReadWrite.All", "DeviceManagementConfiguration.Read.All"
+```
+
+## Project Structure
+```
+W365-BRC/
+├── Public/
+│   ├── Invoke-W365Backup.ps1
+│   ├── Invoke-W365Restore.ps1
+│   └── Invoke-W365Compare.ps1
+├── Private/
+│   ├── Export-Json.ps1
+│   ├── Invoke-FolderCheck.ps1
+│   └── [Other helper functions...]
+├── Tests/
+│   └── W365-BRC.Tests.ps1
+├── W365-BRC.psm1
+├── W365-BRC.psd1
+└── README.md
+```
+
+## Testing
+
+Run the included Pester tests:
+
+```powershell
+# Install Pester if not already installed
+Install-Module Pester -Force
+
+# Run tests
+Invoke-Pester -Path ".\Tests\W365-BRC.Tests.ps1"
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add or update tests
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For issues, questions, or contributions, please visit the GitHub repository.
+
+## Changelog
+
+### Version 1.0.0
+- Initial release
+- Basic backup, restore, and compare functionality
+- Support for Provisioning Policies, User Settings, Custom Images, and Azure Network Connections
+
+---
+
+**Author:** Donna Ryan and Michael Morten Sonne  
+**Organization:** Microsoft Corporation
+**Created:** September 18, 2025
