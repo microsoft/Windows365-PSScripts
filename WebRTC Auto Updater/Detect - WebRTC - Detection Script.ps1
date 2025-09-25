@@ -101,7 +101,7 @@ function get-teamsinstall {
 
     }
     else {
-    update-log -data "Old Teams install found." -Class Information -Output Both
+        update-log -data "Old Teams install found." -Class Information -Output Both
     }
 }
 
