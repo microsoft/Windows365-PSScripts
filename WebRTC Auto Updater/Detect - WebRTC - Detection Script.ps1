@@ -149,9 +149,3 @@ if ($RTCInstalled -eq $RTCCurrent) {
     Exit 0
 }
 
-
-#$appxpacks = Get-ChildItem 'C:\Program Files\WindowsApps'
-
-#foreach ($appxpack in $appxpacks){
-#    if ($appxpack -match "MSTeams"){write-host $appxpack}
-#}
