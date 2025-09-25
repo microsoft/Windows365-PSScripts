@@ -90,7 +90,7 @@ function get-teamsinstall {
 
         foreach ($appxpack in $appxpacks){
             if ($appxpack -match "MSTeams"){$count = $count + 1}
-            }
+        }
         if ($count -eq 0){
             update-log -data "New Teams not found. Teams is not installed. Returning compliant." -Class Information -Output Both
             Exit 0
