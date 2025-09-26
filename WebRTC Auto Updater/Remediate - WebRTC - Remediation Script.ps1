@@ -5,7 +5,7 @@ See LICENSE in the project root for license information.
 #>
 
 
-# Version 0.2.8
+# Version 0.3.1
 
 #####################################
 
@@ -63,20 +63,20 @@ function get-userstate {
 #function to perform the upgrading
 function invoke-remediation {
     $folders = Get-ChildItem -Path C:\users -Directory -force -ErrorAction SilentlyContinue | select fullname, name
-    $TeamsReg = "HKCU:\Software\Microsoft\Office\Teams"
-    $TeamRegExist = test-path -path $TeamsReg
+    #$TeamsReg = "HKCU:\Software\Microsoft\Office\Teams"
+    #$TeamRegExist = test-path -path $TeamsReg
     $RTCCurrent = get-CurrentRTCver
     $global:currentversion
     $RTCInstalled = get-installedRTCver
     try {
-        if ($TeamRegExist -eq $True) {
-            $PreventInstallStateKey = Get-Item -Path $TeamsReg
-            $preventInstall = $PreventInstallStateKey.GetValue("PreventInstallationFromMsi") 
-            if ($preventInstall -ne $null) {
-                update-log -data "Removing PreventInstallationFromMsi reg key" -Class Information -output both
-                Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Office\Teams" -Name "PreventInstallationFromMsi"
-            } 
-        }
+        #if ($TeamRegExist -eq $True) {
+        #    $PreventInstallStateKey = Get-Item -Path $TeamsReg
+        #    $preventInstall = $PreventInstallStateKey.GetValue("PreventInstallationFromMsi") 
+        #    if ($preventInstall -ne $null) {
+        #        update-log -data "Removing PreventInstallationFromMsi reg key" -Class Information -output both
+        #        Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Office\Teams" -Name "PreventInstallationFromMsi"
+        #    } 
+        #}
 
         #Create a directory to save download files
         $tempCreated = $false
@@ -202,8 +202,7 @@ function invoke-disctimer {
 #function to query the latest available version number of WebRTC client
 function get-CurrentRTCver {
     $response = (Invoke-WebRequest -Uri "https://aka.ms/msrdcwebrtcsvc/msi" -UseBasicParsing)
-    $response.headers.'Content-Disposition'
-    $versionC = $response.Headers.'Content-Disposition' -replace ".*HostSetup_", "" -replace ".x64.msi*", "" 
+    $versionC = $response.BaseResponse.ResponseUri.AbsolutePath -replace ".*HostSetup_", "" -replace ".x64.msi*", "" 
     $string = "The latest available version of the WebRTC client is " + $versionC
     update-log -Data $string -Class Information -output both
     $global:currentversion = $versionC

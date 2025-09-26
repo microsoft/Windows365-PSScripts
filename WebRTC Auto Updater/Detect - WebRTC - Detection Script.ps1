@@ -4,7 +4,7 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-# Version 0.2.3
+# Version 0.3.1
 #
 #####################################
 
@@ -17,8 +17,7 @@ Param(
 function get-CurrentRTCver {
     
     $response = (Invoke-WebRequest -Uri "https://aka.ms/msrdcwebrtcsvc/msi" -UseBasicParsing)
-    $response.headers.'Content-Disposition'
-    $versionC = $response.Headers.'Content-Disposition' -replace ".*HostSetup_", "" -replace ".x64.msi*", "" 
+    $versionC = $response.BaseResponse.ResponseUri.AbsolutePath -replace ".*HostSetup_", "" -replace ".x64.msi*", "" 
     $string = "The latest available version of the WebRTC client is " + $versionC
     update-log -Data $string -Class Information -output both
     $global:currentversion = $versionC
@@ -85,11 +84,24 @@ function get-teamsinstall {
     }
 
     if ($count -eq '0') {
-        update-log -data "Teams install not found. User may not have logged into machine yet. Returning Compliant" -Class Information -Output Both
-        Exit 0
+        update-log -data "Classic Teams install not found. Checking for New Teams." -Class Information -Output Both
+        #Exit 0
+        $appxpacks = Get-ChildItem 'C:\Program Files\WindowsApps'
+
+        foreach ($appxpack in $appxpacks){
+            if ($appxpack -match "MSTeams"){$count = $count + 1}
+        }
+        if ($count -eq 0){
+            update-log -data "New Teams not found. Teams is not installed. Returning compliant." -Class Information -Output Both
+            Exit 0
+        }
+        else{
+            update-log -data "New Teams installation has been found" -Class Information -Output Both
+        }
+
     }
     else {
-        update-log -data "Teams install found." -Class Information -Output Both
+        update-log -data "Old Teams install found." -Class Information -Output Both
     }
 }
 
@@ -136,3 +148,4 @@ if ($RTCInstalled -eq $RTCCurrent) {
     update-log -Data "The WebRTC client is current. Returning Compliant" -Class Information -output both
     Exit 0
 }
+
