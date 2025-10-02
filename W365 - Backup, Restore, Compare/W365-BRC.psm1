@@ -24,5 +24,18 @@ foreach ($import in @($Public + $Private)) {
     }
 }
 
-# Export only public functions
-Export-ModuleMember -Function Invoke-W365Backup, Invoke-W365Restore, Invoke-W365Compare
+# Check required modules on import (silent check)
+try {
+    if (Get-Command Test-RequiredModules -ErrorAction SilentlyContinue) {
+        $ModuleCheckResult = Test-RequiredModules -ErrorAction SilentlyContinue
+        if (-not $ModuleCheckResult) {
+            Write-Warning "Some required modules are missing. Run 'Test-RequiredModules -InstallMissing' to install them."
+        }
+    }
+}
+catch {
+    Write-Verbose "Module check skipped during import: $($_.Exception.Message)"
+}
+
+# Export public functions
+Export-ModuleMember -Function Invoke-W365Backup, Invoke-W365Restore, Invoke-W365Compare, Test-RequiredModules

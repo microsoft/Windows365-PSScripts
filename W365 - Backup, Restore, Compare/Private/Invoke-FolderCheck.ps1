@@ -1,4 +1,9 @@
 function Invoke-FolderCheck {
+    <#
+    .SYNOPSIS
+        Helper function to create output directories for backups with timestamp.
+    #>
+
     param($path)
     
     # Output directory for JSON files with timestamp

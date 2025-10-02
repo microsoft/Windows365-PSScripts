@@ -1,10 +1,16 @@
 function Invoke-BkUserSets {
+    <#
+    .SYNOPSIS
+        Helper function to backup Cloud PC User Settings.
+    #>
+
     param($outputdir)
     
     # 4. Cloud PC User Settings
     try {
         $userSettings = Get-MgDeviceManagementVirtualEndpointUserSetting -ExpandProperty assignments
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve user settings: $_"
         return
     }
@@ -16,12 +22,14 @@ function Invoke-BkUserSets {
             try {
                 $Group = Get-MgGroup -GroupId $groupId
                 $setting | Add-Member -MemberType NoteProperty -Name AssignedGroupNames -Value $Group.DisplayName -Force
-            } catch {
+            }
+            catch {
                 Write-Warning "Failed to retrieve group for GroupId '$groupId': $_"
                 $setting | Add-Member -MemberType NoteProperty -Name AssignedGroupNames -Value $null -Force
             }
             Export-Json -FileName $String -Object $setting
-        } catch {
+        }
+        catch {
             Write-Warning "Failed to process setting '$($setting.DisplayName)': $_"
         }
     }

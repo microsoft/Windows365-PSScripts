@@ -1,9 +1,15 @@
 function Invoke-USRestore {
+	<#
+    .SYNOPSIS
+        Helper function to create and assign a user setting from a JSON file.
+    #>
+
 	param($JSON)
 
 	try {
 		$values = Get-Content -Path $JSON | ConvertFrom-Json
-	} catch {
+	}
+ catch {
 		Write-Error "Failed to read or parse JSON file: $_"
 		return
 	}
@@ -14,7 +20,8 @@ function Invoke-USRestore {
 			Write-Error "Assigned group '$($values.AssignedGroupNames)' not found."
 			return
 		}
-	} catch {
+	}
+ catch {
 		Write-Error "Failed to retrieve group information: $_"
 		return
 	}
@@ -32,7 +39,8 @@ function Invoke-USRestore {
 
 	try {
 		$setting = New-MgDeviceManagementVirtualEndpointUserSetting -BodyParameter $params
-	} catch {
+	}
+ catch {
 		Write-Error "Failed to create user setting: $_"
 		return
 	}
@@ -53,7 +61,8 @@ function Invoke-USRestore {
 
 	try {
 		Set-MgDeviceManagementVirtualEndpointUserSetting -CloudPcUserSettingId $setting.Id -BodyParameter $params
-	} catch {
+	}
+ catch {
 		Write-Error "Failed to assign user setting: $_"
 		return
 	}

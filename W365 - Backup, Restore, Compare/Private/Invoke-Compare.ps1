@@ -1,4 +1,9 @@
 function Invoke-Compare {
+    <#
+    .SYNOPSIS
+        Helper function to compare two JSON files and output differences for array properties.
+    #>
+
     param ($JSON1, $JSON2)
     
     try {

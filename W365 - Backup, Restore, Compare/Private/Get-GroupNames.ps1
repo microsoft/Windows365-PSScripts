@@ -1,4 +1,9 @@
 function Get-GroupNames {
+    <#
+    .SYNOPSIS
+        Helper function to get group names from a Cloud PC provisioning policy ID.
+    #>
+    
     param($CPCPPID)
     
     try {
@@ -19,14 +24,17 @@ function Get-GroupNames {
                 $group = Get-MgGroup -GroupId $groupId
                 if ($group) {
                     $group | Format-List
-                } else {
+                }
+                else {
                     Write-Warning "Group with ID $groupId not found."
                 }
-            } catch {
+            }
+            catch {
                 Write-Warning "Error retrieving group with ID $groupId : $_"
             }
         }
-    } catch {
+    }
+    catch {
         Write-Error "Failed to get assignments for policy ID $CPCPPID : $_"
     }
 }

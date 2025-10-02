@@ -1,4 +1,9 @@
 function Invoke-PolicyRetrieval {
+    <#
+    .SYNOPSIS
+        Helper function to retrieve and compare Cloud PC policies.
+    #>
+
     $options = @(
         [PSCustomObject]@{ Option = "Provisioning Policy" }
         [PSCustomObject]@{ Option = "User Setting" }
@@ -42,7 +47,8 @@ function Invoke-PolicyRetrieval {
                     Write-Host $backup
 
                     Invoke-Compare -JSON1 $string -JSON2 $backup
-                } catch {
+                }
+                catch {
                     Write-Host "Error during Provisioning Policy selection or backup: $_"
                 }
             }
@@ -55,7 +61,8 @@ function Invoke-PolicyRetrieval {
                     }
                     Write-Host "You selected: $($selected.Option)"
                     Write-Host $Policy | Format-List
-                } catch {
+                }
+                catch {
                     Write-Host "Error during User Setting selection: $_"
                 }
             }
@@ -68,7 +75,8 @@ function Invoke-PolicyRetrieval {
                     }
                     Write-Host "You selected: $($selected.Option)"
                     Write-Host $Policy | Format-List
-                } catch {
+                }
+                catch {
                     Write-Host "Error during Azure Network Connection selection: $_"
                 }
             }
@@ -81,7 +89,8 @@ function Invoke-PolicyRetrieval {
                     }
                     Write-Host "You selected: $($selected.Option)"
                     Write-Host $Policy | Format-List
-                } catch {
+                }
+                catch {
                     Write-Host "Error during Custom Image selection: $_"
                 }
             }
@@ -89,7 +98,8 @@ function Invoke-PolicyRetrieval {
                 Write-Host "Unknown option selected."
             }
         }
-    } catch {
+    }
+    catch {
         Write-Host "An unexpected error occurred: $_"
     }
 }
