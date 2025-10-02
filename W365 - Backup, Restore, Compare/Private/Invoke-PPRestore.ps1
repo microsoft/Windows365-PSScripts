@@ -1,9 +1,15 @@
 function Invoke-PPRestore {
+    <#
+    .SYNOPSIS
+        Helper function to restore a provisioning policy from a JSON file.
+    #>
+
     param($JSON)
     
     try {
         $values = Get-Content -Path $JSON | ConvertFrom-Json
-    } catch {
+    }
+    catch {
         Write-Error "Failed to read or parse JSON file: $_"
         return
     }
@@ -14,7 +20,8 @@ function Invoke-PPRestore {
             Write-Error "Assigned group '$($values.AssignedGroupNames)' not found."
             return
         }
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve group information: $_"
         return
     }
@@ -42,7 +49,8 @@ function Invoke-PPRestore {
     try {
         $NewPP = New-MgDeviceManagementVirtualEndpointProvisioningPolicy @params
         Write-Host "Provisioning policy created."
-    } catch {
+    }
+    catch {
         Write-Error "Failed to create provisioning policy: $_"
         return
     }
@@ -54,7 +62,8 @@ function Invoke-PPRestore {
                 Write-Error "Service plan '$($values.ServiceLicense)' not found."
                 return
             }
-        } catch {
+        }
+        catch {
             Write-Error "Failed to retrieve service plan: $_"
             return
         }
@@ -89,7 +98,8 @@ function Invoke-PPRestore {
 
     try {
         Set-MgDeviceManagementVirtualEndpointProvisioningPolicy -CloudPcProvisioningPolicyId $NewPP.id -BodyParameter $params
-    } catch {
+    }
+    catch {
         Write-Error "Failed to set provisioning policy assignments: $_"
         return
     }

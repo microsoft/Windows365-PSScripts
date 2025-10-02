@@ -1,4 +1,9 @@
 function Select-FileDialog {
+    <#
+    .SYNOPSIS
+        Helper function to open a file selection dialog and return the selected file path(s).
+    #>
+
     param(
         [string]$Title = 'Select a file',
         [string]$InitialDirectory = [Environment]::GetFolderPath('Desktop'),

@@ -1,10 +1,16 @@
 function Invoke-BkPP {
+    <#
+    .SYNOPSIS
+        Helper function to backup Cloud PC Provisioning Policies.
+    #>
+
     param($outputdir)
     
     # 1. Cloud PC Provisioning Policies
     try {
         $provisioningPolicies = Get-MgDeviceManagementVirtualEndpointProvisioningPolicy -ExpandProperty assignments
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve provisioning policies: $_"
         return
     }
@@ -22,12 +28,14 @@ function Invoke-BkPP {
 
                     $FLSP = Get-MgBetaDeviceManagementVirtualEndpointFrontLineServicePlan -CloudPcFrontLineServicePlanId $pp.Assignments.target.AdditionalProperties.servicePlanId
                     $PP | Add-Member -MemberType NoteProperty -Name ServiceLicense -Value $FLSP.DisplayName
-                } catch {
+                }
+                catch {
                     Write-Warning "Failed to retrieve FrontLineServicePlan or assign properties for policy '$($pp.DisplayName)': $_"
                 }
             }
             Export-Json -FileName $string -Object $pp
-        } catch {
+        }
+        catch {
             Write-Warning "Error processing provisioning policy '$($pp.DisplayName)': $_"
         }
     }

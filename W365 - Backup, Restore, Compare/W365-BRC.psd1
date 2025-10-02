@@ -58,7 +58,13 @@
 	
 	# Modules that must be imported into the global environment prior to importing
 	# this module
-	RequiredModules = @()
+	RequiredModules = @(
+		@{ ModuleName = 'Microsoft.Graph.Authentication'; ModuleVersion = '2.0.0' },
+		@{ ModuleName = 'Microsoft.Graph.DeviceManagement'; ModuleVersion = '2.0.0' },
+		@{ ModuleName = 'Microsoft.Graph.Identity.DirectoryManagement'; ModuleVersion = '2.0.0' },
+		@{ ModuleName = 'Microsoft.Graph.Groups'; ModuleVersion = '2.0.0' },
+		@{ ModuleName = 'Microsoft.Graph.Applications'; ModuleVersion = '2.0.0' }
+	)
 	
 	# Assemblies that must be loaded prior to importing this module
 	RequiredAssemblies = @()
@@ -78,7 +84,7 @@
 	NestedModules = @()
 	
 	# Functions to export from this module
-	FunctionsToExport = '*' #For performance, list functions explicitly
+	FunctionsToExport = @('Invoke-W365Backup', 'Invoke-W365Restore', 'Invoke-W365Compare', 'Test-RequiredModules')
 	
 	# Cmdlets to export from this module
 	CmdletsToExport = '*' 

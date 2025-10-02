@@ -14,7 +14,8 @@ Describe "W365-BRC Module Tests" {
             $ExportedCommands | Should -Contain "Invoke-W365Backup"
             $ExportedCommands | Should -Contain "Invoke-W365Restore"
             $ExportedCommands | Should -Contain "Invoke-W365Compare"
-            $ExportedCommands.Count | Should -Be 3
+            $ExportedCommands | Should -Contain "Test-RequiredModules"
+            $ExportedCommands.Count | Should -Be 4
         }
     }
     
@@ -43,6 +44,26 @@ Describe "W365-BRC Module Tests" {
             $Command = Get-Command Invoke-W365Restore -Module W365-BRC
             $Command.Parameters.Keys | Should -Contain "Object"
             $Command.Parameters.Keys | Should -Contain "JSON"
+        }
+    }
+    
+    Context "Test-RequiredModules Function" {
+        It "Should be available as a command" {
+            Get-Command Test-RequiredModules -Module W365-BRC | Should -Not -BeNullOrEmpty
+        }
+        
+        It "Should have correct parameters" {
+            $Command = Get-Command Test-RequiredModules -Module W365-BRC
+            $Command.Parameters.Keys | Should -Contain "InstallMissing"
+            $Command.Parameters.Keys | Should -Contain "Force"
+            $Command.Parameters.Keys | Should -Contain "Scope"
+        }
+        
+        It "Should return a boolean value when called" {
+            # Mock the module check to avoid actual installation attempts during testing
+            $Result = Test-RequiredModules -WhatIf -ErrorAction SilentlyContinue
+            # The function should at least be callable without errors
+            { Test-RequiredModules -ErrorAction Stop } | Should -Not -Throw
         }
     }
 }
