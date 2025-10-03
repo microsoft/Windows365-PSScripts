@@ -1,4 +1,4 @@
-﻿﻿<#
+﻿<#
 .COPYRIGHT
 Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 See LICENSE in the project root for license information.
@@ -8,7 +8,7 @@ See LICENSE in the project root for license information.
 
 #version v1.0
 
-#The number of lines the script will read
+#The number of lines the script will read. Currently 26 lines covers the entirety of a single health check. Adjust as needed.
 $NumOfLines = 26
 
 #Finds the health check log in the user path
