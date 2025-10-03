@@ -22,7 +22,7 @@ function invoke-WinAppVersion{
         Return 0
      }
      if ($version -ne $null){write-host "Windows App Version - $version"}
-     if ($version -ge 2.0.705.0){Write-host "Acceptable Version for Health Check"}
+     if ($version -ge 2.0.703.0){Write-host "Acceptable Version for Health Check"}
         else{
         write-host "Version is out of date. Please update"
         Return 1
