@@ -1,4 +1,9 @@
 function Invoke-BkImages {
+    <#
+    .SYNOPSIS
+        Helper function to backup Cloud PC Images.
+    #>
+
     param($outputdir)
     
     # 2. Cloud PC Images

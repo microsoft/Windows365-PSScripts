@@ -43,11 +43,11 @@ foreach ($Command in $Commands) {
     Write-Host "   • $($Command.Name)" -ForegroundColor Cyan
 }
 
-# Verify we have exactly 3 functions
-if ($Commands.Count -eq 3) {
-    Write-Host "✅ Correct number of exported functions (3)" -ForegroundColor Green
+# Verify we have exactly 4 functions
+if ($Commands.Count -eq 4) {
+    Write-Host "✅ Correct number of exported functions (4)" -ForegroundColor Green
 } else {
-    Write-Host "⚠️  Expected 3 functions, found $($Commands.Count)" -ForegroundColor Yellow
+    Write-Host "⚠️  Expected 4 functions, found $($Commands.Count)" -ForegroundColor Yellow
 }
 
 # Test function parameters
@@ -55,13 +55,6 @@ Write-Host "`n🔧 Function Parameters:" -ForegroundColor Yellow
 Write-Host "   Invoke-W365Backup: Object, Path" -ForegroundColor Gray
 Write-Host "   Invoke-W365Restore: Object, JSON" -ForegroundColor Gray
 Write-Host "   Invoke-W365Compare: (no parameters)" -ForegroundColor Gray
-
+Write-Host "   Test-RequiredModules: InstallMissing, Force, Scope" -ForegroundColor Gray
 Write-Host "`n✅ Module testing complete!" -ForegroundColor Green
-Write-Host "   Ready to use: Invoke-W365Backup, Invoke-W365Restore, Invoke-W365Compare" -ForegroundColor Gray
-
-#Sample Pester Test
-#Describe "Test W365-BRC" {
-#	It "tests Write-HellowWorld" {
-#		Write-HelloWorld | Should BeExactly "Hello World"
-#	}	
-#}
+Write-Host "   Ready to use: Invoke-W365Backup, Invoke-W365Restore, Invoke-W365Compare, Test-RequiredModules" -ForegroundColor Gray

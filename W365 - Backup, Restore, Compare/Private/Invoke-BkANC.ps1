@@ -1,4 +1,9 @@
 function Invoke-BkANC {
+    <#
+    .SYNOPSIS
+        Helper function to backup Cloud PC On-Premises Connections (ANCs).
+    #>
+    
     param($outputdir)
     
     # 3. Cloud PC On-Premises Connections
@@ -8,11 +13,13 @@ function Invoke-BkANC {
             try {
                 $String = Join-Path -Path $outputdir -ChildPath ("ANCs\" + $ANC.DisplayName + ".json")
                 Export-Json -FileName $String -Object $ANC
-            } catch {
+            }
+            catch {
                 Write-Warning "Failed to export ANC '$($ANC.DisplayName)': $_"
             }
         }
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve On-Premises Connections: $_"
     }
 }
