@@ -6,13 +6,10 @@ See LICENSE in the project root for license information.
 
 #This script is provided without support from Microsoft
 
-#version v1.0
+#version v2.0
 
 #The number of lines for the script to read. Currently 26 lines covers the entirety of a single health check. Adjust as needed.
 $NumOfLines = 26
-
-$count = 0
-
 
 function invoke-HCLogRead($path,$UsersName){
     $output = @()
