@@ -2,6 +2,7 @@
 
 $source = "Store" #Store,WinGet,MSIX,All
 $UninstallMSRDC = $true #$true,$false
+$DisableAutoUpdate = 0
 
 function uninstall-MSRDC{
     try{
@@ -67,6 +68,16 @@ function invoke-WAInstallCheck{
     }
 }
 
+function invoke-disableautoupdate($num){
+    $path = "HKLM:\SOFTWARE\Microsoft\WindowsApp"
+    If (!(Test-Path $path)) {
+        New-Item -Path $path -Force
+}
+
+    New-ItemProperty -Path $path -Name DisableAutomaticUpdates -PropertyType DWORD -Value $num -Force    
+
+}
+
 #check if Windows App is installed. If so, skip installation. Else, install
 if ((invoke-WAInstallCheck) -eq 0){
     write-host "Skipping Windows App Installation"
@@ -87,3 +98,10 @@ if ((invoke-WAInstallCheck) -eq 0){
     {
     write-host "Windows App does not appear to be installed. Something went wrong"
     }
+
+if ($DisableAutoUpdate -ne 0){
+    if ($DisableAutoUpdate -eq 1){invoke-disableautoupdate -num 1}
+    if ($DisableAutoUpdate -eq 2){invoke-disableautoupdate -num 2}
+    if ($DisableAutoUpdate -eq 3){invoke-disableautoupdate -num 3}
+
+}
