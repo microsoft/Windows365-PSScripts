@@ -45,7 +45,6 @@ function uninstall-MSRDCreg{
     {
     write-host "Remote Desktop not detected via registry. Trying as package"
     uninstall-MSRDC
-    
     }
 }
 
@@ -105,9 +104,7 @@ function invoke-disableautoupdate($num){
     If (!(Test-Path $path)) {
         New-Item -Path $path -Force
 }
-
     New-ItemProperty -Path $path -Name DisableAutomaticUpdates -PropertyType DWORD -Value $num -Force    
-
 }
 
 #check if Windows App is installed. If so, skip installation. Else, install
