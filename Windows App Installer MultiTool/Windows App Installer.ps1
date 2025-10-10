@@ -9,7 +9,26 @@ $DisableAutoUpdate = 0
 #2: Disable updates from the Microsoft Store
 #3: Disable updates from the CDN location
 
+#function to uninstall MSRDC by pulling MSIEXEC.EXE GUID from the registy - primary method
+function uninstall-MSRDCreg{
+    
+    $MSRCDreg = Get-ItemProperty hklm:\software\microsoft\windows\currentversion\uninstall\* | Where-Object {$_.Displayname -like "*Remote Desktop*"} | Select-Object DisplayName,DisplayVersion,UninstallString,QuietUninstallString
+    if ($MSRCDreg.DisplayName -eq "Remote Desktop"){
+        write-host "Remote Desktop Installation Found"
+        #write-host "Version " $MSRCDreg.DisplayVersion
+        $uninstall = $MSRCDreg.uninstallstring -replace "MsiExec.exe /X",""
+        write-host "Uninstalling Remote Desktop"
+        Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($uninstall) /q /norestart"
+    }
+    else
+    {
+    write-host "Remote Desktop not detected via registry. Trying as package"
+    uninstall-MSRDC
+    
+    }
+}
 
+#Function to uninstall MSRDC via uninstall-package as a secondary method
 function uninstall-MSRDC{
     try{
         write-host "Looking to see if Remote Desktop is an installed package"
@@ -29,30 +48,12 @@ function uninstall-MSRDC{
     }
 }
 
-function uninstall-MSRDCreg{
-    
-    $MSRCDreg = Get-ItemProperty hklm:\software\microsoft\windows\currentversion\uninstall\* | Where-Object {$_.Displayname -like "*Remote Desktop*"} | Select-Object DisplayName,DisplayVersion,UninstallString,QuietUninstallString
-    if ($MSRCDreg.DisplayName -eq "Remote Desktop"){
-        write-host "Remote Desktop Installation Found"
-        #write-host "Version " $MSRCDreg.DisplayVersion
-        $uninstall = $MSRCDreg.uninstallstring -replace "MsiExec.exe /X",""
-        write-host "Uninstalling Remote Desktop"
-        Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($uninstall) /q /norestart"
-    }
-    else
-    {
-    write-host "Remote Desktop not detected via registry. Trying as package"
-    uninstall-MSRDC
-    
-    }
-}
-
-#function to install Windows App from MS Store
+#function to install Windows App from MS Store - write install process log to $env:windir\temp\WindowsAppStoreInstall.log
 function install-windowsappstore{
    invoke-command -ScriptBlock { winget install 9N1F85V9T8BN --accept-package-agreements --accept-source-agreements} | Out-File -FilePath c:\windows\temp\WindowsAppStoreInstall.log -Append #MS Store Install 
 }
 
-#Function to install Windows App from Winget CDN
+#Function to install Windows App from Winget CDN - write install process log to $env:windir\temp\WindowsAppWinGetInstall.log
 function install-windowsappwinget{
     invoke-command -ScriptBlock {winget install Microsoft.WindowsApp --accept-package-agreements --accept-source-agreements} | Out-File -FilePath c:\windows\temp\WindowsAppWinGetInstall.log -Append #Winget Install
 }
@@ -63,6 +64,7 @@ function install-windowsappMSIX{
     Add-AppxPackage -Path C:\windows\temp\WindowsApp.MSIX
     }
 
+#Function to check if Windows App is installed
 function invoke-WAInstallCheck{
     if ((($testWA = get-appxpackage -name MicrosoftCorporationII.Windows365).name) -eq "MicrosoftCorporationII.Windows365"  ){
         Write-Host "Windows App Installation found."
@@ -75,6 +77,7 @@ function invoke-WAInstallCheck{
     }
 }
 
+#function to set the registry key to control auto updates
 function invoke-disableautoupdate($num){
     write-host "Setting disableautoupdate reg key"
     $path = "HKLM:\SOFTWARE\Microsoft\WindowsApp"
@@ -117,6 +120,7 @@ if ((invoke-WAInstallCheck) -eq 0){
     write-host "Windows App does not appear to be installed. Something went wrong"
     }
 
+#Apply auto update registry key if option selected
 if ($DisableAutoUpdate -ne 0){
     if ($DisableAutoUpdate -eq 1){invoke-disableautoupdate -num 1}
     if ($DisableAutoUpdate -eq 2){invoke-disableautoupdate -num 2}
