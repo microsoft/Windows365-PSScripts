@@ -2,7 +2,13 @@
 
 $source = "Store" #Store,WinGet,MSIX,All
 $UninstallMSRDC = $true #$true,$false
-$DisableAutoUpdate = 0
+
+$DisableAutoUpdate = 0 
+#0: Enables updates (default value)
+#1: Disable updates from all locations
+#2: Disable updates from the Microsoft Store
+#3: Disable updates from the CDN location
+
 
 function uninstall-MSRDC{
     try{
@@ -11,9 +17,10 @@ function uninstall-MSRDC{
 
         if ($MSRDC.name -eq "Remote Desktop"){
            write-host "Remote Desktop Install Found"
-           write-host "Version: " $MSRDC.Version
+           #write-host "Version: " $MSRDC.Version
            write-host "Uninstalling Remote Desktop"
            Uninstall-Package -Name "Remote Desktop" -force | Out-Null
+           write-host "Remote Desktop uninstalled"
        }
     }
     catch
@@ -26,10 +33,10 @@ function uninstall-MSRDCreg{
     
     $MSRCDreg = Get-ItemProperty hklm:\software\microsoft\windows\currentversion\uninstall\* | Where-Object {$_.Displayname -like "*Remote Desktop*"} | Select-Object DisplayName,DisplayVersion,UninstallString,QuietUninstallString
     if ($MSRCDreg.DisplayName -eq "Remote Desktop"){
-        write-host "MSRDC Installation Found"
-        write-host "Version " $MSRCDreg.DisplayVersion
+        write-host "Remote Desktop Installation Found"
+        #write-host "Version " $MSRCDreg.DisplayVersion
         $uninstall = $MSRCDreg.uninstallstring -replace "MsiExec.exe /X",""
-        write-host "uninstalling"
+        write-host "Uninstalling Remote Desktop"
         Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($uninstall) /q /norestart"
     }
     else
@@ -42,12 +49,12 @@ function uninstall-MSRDCreg{
 
 #function to install Windows App from MS Store
 function install-windowsappstore{
-   invoke-command -ScriptBlock { winget install 9N1F85V9T8BN --accept-package-agreements --accept-source-agreements} #MS Store Install
+   invoke-command -ScriptBlock { winget install 9N1F85V9T8BN --accept-package-agreements --accept-source-agreements} | out-null #MS Store Install 
 }
 
 #Function to install Windows App from Winget CDN
 function install-windowsappwinget{
-    invoke-command -ScriptBlock {winget install Microsoft.WindowsApp --accept-package-agreements --accept-source-agreements} #Winget Install
+    invoke-command -ScriptBlock {winget install Microsoft.WindowsApp --accept-package-agreements --accept-source-agreements} | out-null #Winget Install
 }
 
 #Function to install Windows App from MSIX direct download
@@ -69,6 +76,7 @@ function invoke-WAInstallCheck{
 }
 
 function invoke-disableautoupdate($num){
+    write-host "Setting disableautoupdate reg key"
     $path = "HKLM:\SOFTWARE\Microsoft\WindowsApp"
     If (!(Test-Path $path)) {
         New-Item -Path $path -Force
@@ -84,15 +92,25 @@ if ((invoke-WAInstallCheck) -eq 0){
     }
 else
     {
-    if ($source -eq "Store"){install-windowsappstore}
-    if ($source -eq "WinGet"){install-windowsappwinget}
-    if ($source -eq "MSIX"){install-windowsappMSIX}
+    if ($source -eq "Store"){
+        write-host "Starting Windows App installation from Microsoft Store"
+        install-windowsappstore
+        }
+    if ($source -eq "WinGet"){
+        write-host "Starting Windows App installation from WinGet"
+        install-windowsappwinget
+        }
+    if ($source -eq "MSIX"){
+        write-host "Starting Windows App installation from MSIX download"
+        install-windowsappMSIX
+        }
 }
 
 #verify if Windows App has now been installed. If so, move to uninstalling MSRDC. Else, fail.
 if ((invoke-WAInstallCheck) -eq 0){
+    write-host "Validated Windows App Installed"
     if ($UninstallMSRDC -eq $true){uninstall-MSRDCreg}
-    write-host "Installation Complete"
+    #write-host "Installation Complete"
     }
     else
     {
@@ -105,3 +123,4 @@ if ($DisableAutoUpdate -ne 0){
     if ($DisableAutoUpdate -eq 3){invoke-disableautoupdate -num 3}
 
 }
+write-host "Installation Complete"
