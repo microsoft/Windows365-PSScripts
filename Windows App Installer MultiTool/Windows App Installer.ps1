@@ -1,9 +1,30 @@
-﻿cls
+﻿#cls
+#Needs:
+#try/catch in main functions
+#change write-host to proper logging
+#Test Param Block
+#test with store disabled from policy
+#test on Windows 10
+#test on LTSC greater than 1809
+#test when Windows App doesn't install (use pause and delete)
 
-$source = "Store" #Store,WinGet,MSIX,All
-$UninstallMSRDC = $true #$true,$false
+Param(
+    [parameter(mandatory = $false, HelpMessage = "Where to source installer payload")] 
+    [ValidateSet('Store','WinGet','MSIX')]
+    [string]$source = "Store",
+    [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
+    [ValidateSet(0,1,2,3)]
+    [int]$DisableAutoUpdate = 0,
+    [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
+    [ValidateSet($true,$false)]
+    [string]$UninstallMSRDC = $true
+)
 
-$DisableAutoUpdate = 0 
+
+#$source = "Store" #Store,WinGet,MSIX,All
+#$UninstallMSRDC = $true #$true,$false
+
+#$DisableAutoUpdate = 0 
 #0: Enables updates (default value)
 #1: Disable updates from all locations
 #2: Disable updates from the Microsoft Store
