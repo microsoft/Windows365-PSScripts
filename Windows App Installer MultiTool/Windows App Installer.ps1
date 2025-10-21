@@ -15,9 +15,11 @@ Param(
     [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
     [ValidateSet(0,1,2,3)]
     [int]$DisableAutoUpdate = 0,
-    [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
-    [ValidateSet($true,$false)]
-    [string]$UninstallMSRDC = $true,
+    #[parameter(mandatory = $false, HelpMessage = "Uninstall Remote Desktop if found")]
+    #[ValidateSet($true,$false)]
+    #[string]$UninstallMSRDC = $true,
+    [parameter(mandatory = $false, HelpMessage = "Do not uninstall Remote Desktop if found")]
+    [switch]$SkipRemoteDesktopUninstall ,
     [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
     [string]$logpath = "$env:windir\temp\MultiTool.log"
 )
@@ -222,7 +224,8 @@ else
 #verify if Windows App has now been installed. If so, move to uninstalling MSRDC. Else, fail.
 if ((invoke-WAInstallCheck) -eq 0){
     update-log -Data "Validated Windows App Installed" -Class Information -Output Both
-    if ($UninstallMSRDC -eq $true){uninstall-MSRDCreg}
+    if ($SkipRemoteDesktopUninstall -eq $False){uninstall-MSRDCreg}
+    #$SkipRemoteDesktopUninstall
     #update-log -Data "Installation Complete"
     }
     else
