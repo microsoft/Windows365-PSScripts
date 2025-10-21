@@ -1,14 +1,4 @@
-﻿#cls
-#Needs:
-#try/catch in main functions
-#complete #change update-log -Data to proper logging
-#complete #Test Param Block
-#test with store disabled from policy
-#test on Windows 10
-#test on LTSC greater than 1809
-#test when Windows App doesn't install (use pause and delete)
-
-Param(
+﻿Param(
     [parameter(mandatory = $false, HelpMessage = "Where to source installer payload")] 
     [ValidateSet('Store','WinGet','MSIX')]
     [string]$source = "Store",
