@@ -1,20 +1,27 @@
-﻿Param(
+﻿<#
+.COPYRIGHT
+Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
+See LICENSE in the project root for license information.
+#>
+
+#Microsoft Remote Desktop Client Migration Script
+#Version 1.0
+#For more info, visit: https://github.com/microsoft/Windows365-PSScripts
+
+Param(
     [parameter(mandatory = $false, HelpMessage = "Where to source installer payload")] 
     [ValidateSet('Store','WinGet','MSIX')]
     [string]$source = "Store",
     [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
     [ValidateSet(0,1,2,3)]
     [int]$DisableAutoUpdate = 0,
-    #[parameter(mandatory = $false, HelpMessage = "Uninstall Remote Desktop if found")]
-    #[ValidateSet($true,$false)]
-    #[string]$UninstallMSRDC = $true,
     [parameter(mandatory = $false, HelpMessage = "Do not uninstall Remote Desktop if found")]
     [switch]$SkipRemoteDesktopUninstall ,
     [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
     [string]$logpath = "$env:windir\temp\MultiTool.log"
 )
 
-#$DisableAutoUpdate = 0 
+#$DisableAutoUpdate values:
 #0: Enables updates (default value)
 #1: Disable updates from all locations
 #2: Disable updates from the Microsoft Store
@@ -63,7 +70,6 @@ function uninstall-MSRDCreg{
             update-log -Data "Something went wrong uninstalling Remote Desktop" -Class Error -Output Both 
             Update-Log -data $_.Exception.Message -Class Error -Output Both
         }
-    
     }
     else
     {
@@ -116,7 +122,6 @@ function install-windowsappstore{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
         Exit 1
    }
-
 }
 
 #Function to install Windows App from Winget CDN - write install process log to $env:windir\temp\WindowsAppWinGetInstall.log
@@ -130,7 +135,6 @@ function install-windowsappwinget{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
         Exit 1
     }
-
 }
 
 #Function to install Windows App from MSIX direct download
@@ -150,16 +154,13 @@ function install-windowsappMSIX{
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
     }
-
     try{
         Add-AppxPackage -Path $env:windir\temp\$filename -ErrorAction Stop
     }
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
     }
-    
-    
-    }
+}
 
 #Function to check if Windows App is installed
 function invoke-WAInstallCheck{
@@ -180,15 +181,13 @@ function invoke-disableautoupdate($num){
     $path = "HKLM:\SOFTWARE\Microsoft\WindowsApp"
     If (!(Test-Path $path)) {
         New-Item -Path $path -Force
-}
+    }
     try{
         New-ItemProperty -Path $path -Name DisableAutomaticUpdates -PropertyType DWORD -Value $num -Force -ErrorAction Stop| Out-Null    
     }
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
     }
-
-
 }
 
 #check if Windows App is installed. If so, skip installation. Else, install
@@ -215,8 +214,6 @@ else
 if ((invoke-WAInstallCheck) -eq 0){
     update-log -Data "Validated Windows App Installed" -Class Information -Output Both
     if ($SkipRemoteDesktopUninstall -eq $False){uninstall-MSRDCreg}
-    #$SkipRemoteDesktopUninstall
-    #update-log -Data "Installation Complete"
     }
     else
     {
@@ -229,7 +226,7 @@ if ($DisableAutoUpdate -ne 0){
     if ($DisableAutoUpdate -eq 1){invoke-disableautoupdate -num 1}
     if ($DisableAutoUpdate -eq 2){invoke-disableautoupdate -num 2}
     if ($DisableAutoUpdate -eq 3){invoke-disableautoupdate -num 3}
-
 }
+
 update-log -Data "Installation Complete" -Class Information -Output Both
 update-log -data "************" -Class Information -Output File
