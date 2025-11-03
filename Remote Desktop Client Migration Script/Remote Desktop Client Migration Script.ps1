@@ -18,7 +18,7 @@ Param(
     [parameter(mandatory = $false, HelpMessage = "Do not uninstall Remote Desktop if found")]
     [switch]$SkipRemoteDesktopUninstall ,
     [parameter(mandatory = $false, HelpMessage = "Log path and file name")] 
-    [string]$logpath = "$env:windir\temp\MultiTool.log"
+    [string]$logpath = "$env:windir\temp\RDC-Migration.log"
 )
 
 #$DisableAutoUpdate values:

@@ -1,105 +1,233 @@
-# Windows App Installer MultiTool
+# Remote Desktop Client Migration Script
 
-A PowerShell utility to detect and install the Windows 365 "Windows App" client, optionally set its auto-update registry key, and remove legacy "Remote Desktop" installs when present. This README documents the script behavior, parameters, examples, logs and troubleshooting.
+## Overview
+This PowerShell script automates the migration from the legacy Remote Desktop client to the new **Windows App** (formerly Windows 365). It handles the installation of Windows App from multiple sources and optionally uninstalls the old Remote Desktop client.
+
+**Version:** 1.0  
+**Copyright:** Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 
 ## What it does
-- Detects whether the Windows App (`MicrosoftCorporationII.Windows365`) is installed.
+- Detects whether the Windows App (`MicrosoftCorporationII.Windows365`) is already installed
 - Installs the Windows App from one of three sources:
   - Microsoft Store (via winget id `9N1F85V9T8BN`) — `Store` (default)
   - WinGet CDN package (`Microsoft.WindowsApp`) — `WinGet`
   - Direct MSIX download (FWLINK) and `Add-AppxPackage` — `MSIX`
-- Optionally writes `HKLM:\SOFTWARE\Microsoft\WindowsApp\DisableAutomaticUpdates` to control auto updates.
-- Optionally uninstalls legacy "Remote Desktop" via registry/MSI or package uninstall methods.
-- Writes logs to console and to the configured log file.
+- Validates successful Windows App installation
+- Optionally uninstalls legacy "Remote Desktop" client using two fallback methods:
+  - Primary: Registry-based MSI uninstall
+  - Fallback: Package-based uninstall
+- Optionally configures automatic update behavior via registry key
+- Comprehensive logging to console and file
 
-## Files
-- `Windows App Installer.ps1` — main script.
-- Runtime logs:
-  - Default log: `%windir%\Temp\MultiTool.log` (can be changed with `-logpath`)
-  - Store install trace: `%windir%\Temp\WindowsAppStoreInstall.log`
-  - WinGet install trace: `%windir%\Temp\WindowsAppWinGetInstall.log`
-
-## Requirements
-- Windows (modern Windows 10/11 recommended).
-- PowerShell (script compatible with Windows PowerShell 5.1 and later).
-- Administrative privileges to install packages and write to HKLM.
-- Internet access for Store/WinGet/MSIX downloads.
-- Winget and/or Microsoft Store available for corresponding install methods (use `MSIX` when Store is blocked).
+## Prerequisites
+- Windows 10/11 operating system
+- PowerShell 5.1 or later
+- Administrator privileges (required for package installation and registry modifications)
+- Internet connectivity (for downloading Windows App)
+- WinGet (if using WinGet installation method)
+- Microsoft Store access (if using Store installation method, or use `MSIX` when Store is blocked)
 
 ## Parameters
-- `-source` (string)  
-  Where to source the installer payload. Allowed values: `Store` (default), `WinGet`, `MSIX`.
-- `-DisableAutoUpdate` (int)  
-  Sets the registry DWORD `HKLM:\SOFTWARE\Microsoft\WindowsApp\DisableAutomaticUpdates`. Allowed values:
-  - `0` — Enable updates (default)
-  - `1` — Disable updates from all locations
-  - `2` — Disable updates from Microsoft Store
-  - `3` — Disable updates from the CDN
-- `-SkipRemoteDesktopUninstall` (switch)  
-  If present, skip attempting to remove legacy Remote Desktop.
-- `-logpath` (string)  
-  Path to the primary log file (default: `$env:windir\temp\MultiTool.log`).
 
-## High-level functions (what they do)
-- `update-log` — logging helper (console / file / both).
-- `invoke-WAInstallCheck` — returns 0 if Windows App is present, 1 otherwise.
-- `install-windowsappstore` — triggers Store install (uses winget id `9N1F85V9T8BN`) and logs to temp file.
-- `install-windowsappwinget` — triggers WinGet install for `Microsoft.WindowsApp` and logs to temp file.
-- `install-windowsappMSIX` — downloads MSIX via FWLINK and installs with `Add-AppxPackage`.
-- `uninstall-MSRDCreg` — primary uninstall of legacy Remote Desktop via registry MSI uninstall string.
-- `uninstall-MSRDC` — secondary uninstall via `Get-Package` / `Uninstall-Package`.
-- `invoke-disableautoupdate` — creates/sets `DisableAutomaticUpdates` DWORD.
+### `-source`
+Specifies where to source the Windows App installer payload.
 
-## Usage examples (run elevated)
-Default (Store) install:
+**Type:** String  
+**Valid Values:** `Store`, `WinGet`, `MSIX`  
+**Default:** `Store`  
+**Required:** No
+
+- `Store`: Installs from Microsoft Store (ID: 9N1F85V9T8BN)
+- `WinGet`: Installs from WinGet CDN using package ID `Microsoft.WindowsApp`
+- `MSIX`: Downloads and installs directly from MSIX package (use when Store is blocked)
+
+### `-DisableAutoUpdate`
+Controls the automatic update behavior for Windows App by setting the registry key `HKLM:\SOFTWARE\Microsoft\WindowsApp\DisableAutomaticUpdates`.
+
+**Type:** Integer  
+**Valid Values:** `0`, `1`, `2`, `3`  
+**Default:** `0`  
+**Required:** No
+
+- `0`: Enables updates (default)
+- `1`: Disables updates from all locations
+- `2`: Disables updates from Microsoft Store only
+- `3`: Disables updates from CDN location only
+
+### `-SkipRemoteDesktopUninstall`
+Prevents the script from uninstalling the Remote Desktop client.
+
+**Type:** Switch  
+**Default:** `$false`  
+**Required:** No
+
+### `-logpath`
+Specifies the location and filename for the script log.
+
+**Type:** String  
+**Default:** `$env:windir\temp\RDC-Migration.log`  
+**Required:** No
+
+## Usage Examples
+
+### Basic Usage (Microsoft Store - Default)
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File ".\Windows App Installer.ps1"
+.\Remote Desktop Client Migration Script.ps1
 ```
 
-Install via WinGet and disable Store updates (set key = 2):
+### Install from WinGet
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File ".\Windows App Installer.ps1" -source WinGet -DisableAutoUpdate 2
+.\Remote Desktop Client Migration Script.ps1 -source WinGet
 ```
 
-Install via MSIX and skip removing legacy Remote Desktop:
+### Install from MSIX (Direct Download)
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File ".\Windows App Installer.ps1" -source MSIX -SkipRemoteDesktopUninstall
+.\Remote Desktop Client Migration Script.ps1 -source MSIX
 ```
 
-Specify an alternate log file:
+### Disable All Auto-Updates
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File ".\Windows App Installer.ps1" -logpath "C:\Temp\WinAppInstall.log"
+.\Remote Desktop Client Migration Script.ps1 -DisableAutoUpdate 1
 ```
 
-## Exit behavior & logs
-- On fatal install failures the script calls `exit 1`.
-- Normal success writes completion messages to logs and returns normally.
-- Check logs for details:
-  - Primary: `%windir%\Temp\MultiTool.log` (or the `-logpath` you supplied)
-  - Install traces: `%windir%\Temp\WindowsAppStoreInstall.log`, `%windir%\Temp\WindowsAppWinGetInstall.log`
+### Disable Store Updates Only
+```powershell
+.\Remote Desktop Client Migration Script.ps1 -source WinGet -DisableAutoUpdate 2
+```
+
+### Keep Remote Desktop Client Installed
+```powershell
+.\Remote Desktop Client Migration Script.ps1 -SkipRemoteDesktopUninstall
+```
+
+### Custom Log Location
+```powershell
+.\Remote Desktop Client Migration Script.ps1 -logpath "C:\Logs\RDC-Migration.log"
+```
+
+### Full Example with All Parameters
+```powershell
+.\Remote Desktop Client Migration Script.ps1 -source Store -DisableAutoUpdate 2 -logpath "C:\Logs\migration.log"
+```
+
+### Run with Execution Policy Bypass
+```powershell
+PowerShell -ExecutionPolicy Bypass -File ".\Remote Desktop Client Migration Script.ps1" -source MSIX -SkipRemoteDesktopUninstall
+```
+
+## How It Works
+
+The script follows this workflow:
+
+1. **Pre-Installation Check**: Verifies if Windows App is already installed
+   - If found, skips installation
+   - If not found, proceeds to installation
+
+2. **Installation**: Installs Windows App from the specified source
+   - **Store**: Uses WinGet with Store ID `9N1F85V9T8BN`
+   - **WinGet**: Uses WinGet CDN package `Microsoft.WindowsApp`
+   - **MSIX**: Downloads from `https://go.microsoft.com/fwlink/?linkid=2262633` and installs via `Add-AppxPackage`
+
+3. **Validation**: Confirms successful Windows App installation
+   - Checks for AppX package `MicrosoftCorporationII.Windows365`
+   - Exits with error code 1 if not found
+
+4. **Uninstallation** (unless `-SkipRemoteDesktopUninstall` is used):
+   - **Primary Method**: Registry-based MSI uninstall using `MsiExec.exe /x`
+   - **Fallback Method**: Package-based uninstall using `Uninstall-Package`
+
+5. **Configuration**: Applies auto-update registry settings if specified
+
+6. **Completion**: Logs final status and exits
+
+## Log Files
+
+### Main Script Log
+- **Default Location:** `%windir%\temp\RDC-Migration.log`
+- **Configurable via:** `-logpath` parameter
+- **Contains:** Detailed information about script execution with timestamps, actions, warnings, and errors
+
+### Installation Process Logs
+- **Store Installation:** `%windir%\temp\WindowsAppStoreInstall.log`
+- **WinGet Installation:** `%windir%\temp\WindowsAppWinGetInstall.log`
+- **MSIX Download:** Payload downloaded to `%windir%\temp\`
+
+### Log Format
+Each log entry includes:
+- Log level (Information, Warning, Error, Comment)
+- Timestamp in format: `MM/DD/YY HH:MM:SS AM/PM`
+- Descriptive message
+
+## Exit Codes
+- **0**: Success (normal completion)
+- **1**: Failure (Windows App installation failed or not detected after installation)
+
+## Script Functions
+
+The script includes the following key functions:
+
+- **`update-log`**: Logging helper that writes to console and/or file with timestamps
+- **`invoke-WAInstallCheck`**: Checks if Windows App is installed (returns 0 if present, 1 if not)
+- **`install-windowsappstore`**: Installs Windows App from Microsoft Store via WinGet
+- **`install-windowsappwinget`**: Installs Windows App from WinGet CDN
+- **`install-windowsappMSIX`**: Downloads and installs Windows App from direct MSIX download
+- **`uninstall-MSRDCreg`**: Primary method to uninstall Remote Desktop via registry MSI uninstall string
+- **`uninstall-MSRDC`**: Fallback method to uninstall Remote Desktop via `Get-Package`/`Uninstall-Package`
+- **`invoke-disableautoupdate`**: Creates/sets the `DisableAutomaticUpdates` registry key
+
+## Registry Configuration
+
+When using `-DisableAutoUpdate`, the script creates/modifies:
+
+```
+Registry Key: HKLM:\SOFTWARE\Microsoft\WindowsApp
+Value Name: DisableAutomaticUpdates
+Value Type: DWORD
+```
 
 ## Troubleshooting
-- Permission / access denied:
-  - Run PowerShell as Administrator.
-- Winget not found or Microsoft Store disabled:
-  - Use `-source MSIX` to attempt a direct MSIX install.
-- `Add-AppxPackage` errors:
-  - Ensure sideloading is allowed or that the package signature and system policy permit the install.
-- Remote Desktop uninstall fails:
-  - The script tries registry/MSI first then package uninstall. Manual removal may be required if uninstall strings are missing.
-- For diagnostics:
-  - Inspect the three logs listed above for error messages and stack traces.
 
-## Known limitations
-- Script assumes availability of `winget` for Store/WinGet flows; environments with Store disabled may fail unless `MSIX` chosen.
-- Error handling is present but could be more granular (some functions catch and log but do not standardize exit codes).
-- Not explicitly tested on Windows LTSC or older Windows 10 branches — behavior may vary.
+### Permission or Access Denied Errors
+- Ensure PowerShell is running as Administrator
+- Verify write permissions to log directory and registry
 
-## Recommended next steps
-- Add a `-WhatIf`/dry-run mode.
-- Add explicit checks for `winget`/Store presence before choosing install path.
-- Convert `update-log` to structured logging (timestamped JSON) for automation.
-- Add more granular exit codes to represent specific failure types.
+### Windows App Installation Fails
+- **Check Internet Connectivity**: Ensure the device can reach Microsoft services
+- **WinGet Not Found**: If using Store or WinGet source, verify WinGet is installed
+- **Microsoft Store Disabled**: Use `-source MSIX` for direct MSIX installation
+- **Review Logs**: Check installation logs in `%windir%\temp\` for specific errors
+
+### AppX Package Installation Errors
+- Ensure sideloading is allowed in Windows settings
+- Verify package signature and system policy permit installation
+- Check if Developer Mode is required
+
+### Remote Desktop Uninstall Issues
+- The script automatically tries two methods (registry-based MSI and package-based)
+- Check the main log file for specific error messages
+- Use `-SkipRemoteDesktopUninstall` to bypass uninstallation if problematic
+- Manual removal may be required if uninstall strings are missing
+
+### Script Exits with Error Code 1
+- Windows App installation failed or was not detected after installation
+- Review all log files for error details
+- Try an alternative installation source
+
+### WinGet Command Not Recognized
+- Install App Installer from Microsoft Store
+- Or use `-source MSIX` to bypass WinGet requirement
+
+## Known Limitations
+- Script assumes WinGet availability for Store/WinGet installation methods
+- Error handling logs exceptions but may not provide granular exit codes for all failure types
+- Not extensively tested on Windows LTSC or older Windows 10 branches
+- Requires internet connectivity for all installation sources
+
+## Additional Information
+
+For more information about this script and other Windows 365 PowerShell scripts, visit:  
+**https://github.com/microsoft/Windows365-PSScripts**
 
 ## License
-No license is specified. Add a `LICENSE` file if you intend to publish or share.
+Copyright (c) Microsoft Corporation. All rights reserved.  
+Licensed under the MIT license. See LICENSE in the project root for license information.
