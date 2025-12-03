@@ -5,7 +5,7 @@ See LICENSE in the project root for license information.
 #>
 
 
-# Version 0.3.1
+# Version 0.3.2
 
 #####################################
 

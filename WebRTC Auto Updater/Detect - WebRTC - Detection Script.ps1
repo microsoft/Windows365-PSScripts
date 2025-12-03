@@ -4,7 +4,7 @@ Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT
 See LICENSE in the project root for license information.
 #>
 
-# Version 0.3.1
+# Version 0.3.2
 #
 #####################################
 
@@ -86,20 +86,28 @@ function get-teamsinstall {
 
     if ($count -eq '0') {
         update-log -data "Classic Teams install not found. Checking for New Teams." -Class Information -Output Both
+        ###  Old method of finding New Teams. It was not reliable. Keeping until new process validated and pushing to Main
         #Exit 0
-        $appxpacks = Get-ChildItem 'C:\Program Files\WindowsApps'
+        #$appxpacks = Get-ChildItem 'C:\Program Files\WindowsApps'
 
-        foreach ($appxpack in $appxpacks){
-            if ($appxpack -match "MSTeams"){$count = $count + 1}
-        }
-        if ($count -eq 0){
+        #foreach ($appxpack in $appxpacks){
+        #    if ($appxpack -match "MSTeams"){$count = $count + 1}
+        #}
+        #if ($count -eq 0){
+        #    update-log -data "New Teams not found. Teams is not installed. Returning compliant." -Class Information -Output Both
+        #    Exit 0
+        #}
+        #else{
+        #    update-log -data "New Teams installation has been found" -Class Information -Output Both
+        #}
+        $NewTeams = (get-appxpackage -Name MSteams)
+        if ((get-appxpackage -Name MSteams) -eq $null){
             update-log -data "New Teams not found. Teams is not installed. Returning compliant." -Class Information -Output Both
             Exit 0
-        }
+            }
         else{
-            update-log -data "New Teams installation has been found" -Class Information -Output Both
+           update-log -data "New Teams installation has been found" -Class Information -Output Both
         }
-
     }
     else {
         update-log -data "Old Teams install found." -Class Information -Output Both
