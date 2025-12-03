@@ -56,14 +56,14 @@ function update-log {
 #function to uninstall MSRDC by pulling MSIEXEC.EXE GUID from the registy - primary method
 function uninstall-MSRDCreg{
     
-    $MSRCDreg = Get-ItemProperty hklm:\software\microsoft\windows\currentversion\uninstall\* | Where-Object {$_.Displayname -like "*Remote Desktop*"} | Select-Object DisplayName,DisplayVersion,UninstallString,QuietUninstallString
+    $MSRCDreg = Get-ItemProperty hklm:\software\microsoft\windows\currentversion\uninstall\* | Where-Object {$_.Displayname -eq "Remote Desktop"} | Select-Object DisplayName,DisplayVersion,UninstallString,QuietUninstallString
     if ($MSRCDreg.DisplayName -eq "Remote Desktop"){
         update-log -Data "Remote Desktop Installation Found" -Class Information -Output Both
         $uninstall = $MSRCDreg.uninstallstring -replace "MsiExec.exe /X",""
         update-log -Data "Uninstalling Remote Desktop"  -Class Information -Output Both
         
         try{
-            Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($uninstall) /q /norestart" -ErrorAction Stop
+            Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($uninstall) /q /norestart" -Wait -ErrorAction Stop
         }
         catch
         {
