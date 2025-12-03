@@ -29,6 +29,7 @@ function get-installedRTCver {
     if ((test-path -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\AddIns\WebRTC Redirector\') -eq $true) {
 
         $version = (Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\AddIns\WebRTC Redirector\')
+        if ($version.CurrentVersion -eq "1.53.2408.19001"){$version.CurrentVersion = "1.54.2408.19001"}
         $string = "The currently installed version of the WebRTC client is " + $version.currentversion
         update-log -Data $string -Class Information -output both
         return $version.currentversion
