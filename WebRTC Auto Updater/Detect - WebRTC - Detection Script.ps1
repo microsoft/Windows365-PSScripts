@@ -100,8 +100,8 @@ function get-teamsinstall {
         #else{
         #    update-log -data "New Teams installation has been found" -Class Information -Output Both
         #}
-        $NewTeams = (get-appxpackage -Name MSteams)
-        if ((get-appxpackage -Name MSteams) -eq $null){
+
+        if ((get-appxpackage -Name MicrosoftTeams) -eq $null){
             update-log -data "New Teams not found. Teams is not installed. Returning compliant." -Class Information -Output Both
             Exit 0
             }
