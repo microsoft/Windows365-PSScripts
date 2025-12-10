@@ -42,6 +42,7 @@ Run the script using the System account. It is intended for mass deployment thro
 
 # Example: Disable all updates and skip uninstall
 .\Remote Desktop Client Migration Script.ps1 -DisableAutoUpdate 1 -SkipRemoteDesktopUninstall
+```
+## Troubleshooting
 
-
-
+Steps coming soon.
