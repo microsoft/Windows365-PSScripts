@@ -5,7 +5,7 @@ See LICENSE in the project root for license information.
 #>
 
 #Microsoft Remote Desktop Client Migration Script
-#Version 1.1
+#Version 1.2
 #For more info, visit: https://github.com/microsoft/Windows365-PSScripts
 
 Param(
@@ -110,18 +110,21 @@ function uninstall-MSRDC{
 
 #Function to install Windows App from MSIX direct download
 function install-windowsappMSIX{
-
+    $guid = New-Guid
     try{
         update-log -data "Downloading payload" -Class Information -Output Both
-        if ((test-path -Path $env:windir\Temp\WindowsApp.msix) -eq $true){Remove-Item -Path $env:windir\Temp\WindowsApp.msix -Force -ErrorAction Stop}        
+        #if ((test-path -Path $env:windir\Temp\WindowsApp.msix) -eq $true){Remove-Item -Path $env:windir\Temp\WindowsApp.msix -Force -ErrorAction Stop}        
         
-        $Payload = Invoke-WebRequest -uri "https://go.microsoft.com/fwlink/?linkid=2262633" -UseBasicParsing -OutFile $env:windir\Temp\WindowsApp.msix -PassThru -ErrorAction Stop
+        new-item -Path $env:windir\temp -Name $guid.guid -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        $path = $env:windir + "\temp\" + $guid.guid
+
+        $Payload = Invoke-WebRequest -uri "https://go.microsoft.com/fwlink/?linkid=2262633" -UseBasicParsing -OutFile $path\WindowsApp.msix -PassThru -ErrorAction Stop
         $filename = ($Payload.BaseResponse.ResponseUri.AbsolutePath -replace ".*/")
     
-        if ((test-path -Path $env:windir\Temp\$filename) -eq $true){Remove-Item -Path $env:windir\Temp\$filename -Force -ErrorAction Stop}    
+        #if ((test-path -Path $env:windir\Temp\$filename) -eq $true){Remove-Item -Path $env:windir\Temp\$filename -Force -ErrorAction Stop}    
     
-        Rename-Item -Path $env:windir\Temp\WindowsApp.msix -NewName $filename -Force -ErrorAction Stop
-        update-log -Data "Downloaded $filename to $env:windir\temp" -Class Information -Output Both
+        Rename-Item -Path $path\WindowsApp.msix -NewName $filename -Force -ErrorAction Stop
+        update-log -Data "Downloaded $filename to $path" -Class Information -Output Both
         
         }
     catch{
@@ -130,7 +133,16 @@ function install-windowsappMSIX{
     try{
         #Add-AppxPackage -Path $env:windir\temp\$filename -ErrorAction Stop
         update-log -data "Installing Windows App MSIX package..." -Class Information -Output Both
-        add-appxprovisionedpackage -PackagePath $env:windir\temp\$filename -online -SkipLicense -ErrorAction Stop | Out-Null
+        add-appxprovisionedpackage -PackagePath $path\$filename -online -SkipLicense -ErrorAction Stop | Out-Null
+    }
+    catch{
+        Update-Log -data $_.Exception.Message -Class Error -Output Both
+    }
+
+    try{
+        update-log -data "Cleaning up temp folder and files..." -Class Information -Output Both
+        remove-item -Path $path -Recurse -Force -ErrorAction Stop | Out-Null
+    
     }
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
@@ -169,6 +181,8 @@ function invoke-disableautoupdate($num){
         Update-Log -data $_.Exception.Message -Class Error -Output Both
     }
 }
+
+
 
 #check if Windows App is installed. If so, skip installation. Else, install
 if ((invoke-WAInstallCheck) -eq 0){

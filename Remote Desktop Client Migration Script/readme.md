@@ -46,3 +46,7 @@ Run the script using the System account. It is intended for mass deployment thro
 ## Troubleshooting
 
 Steps coming soon.
+
+## How to deploy script with Intune
+
+Steps coming soon
