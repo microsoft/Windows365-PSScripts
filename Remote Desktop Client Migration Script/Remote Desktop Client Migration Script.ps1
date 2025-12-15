@@ -84,12 +84,11 @@ function uninstall-MSRDC{
         }
         catch
         {
-            Update-Log -data $_.Exception.Message -Class Error -Output Both
+            Update-Log -data $_.Exception.Message -Class Information -Output Both
         }
 
         if ($MSRDC.name -eq "Remote Desktop"){
            update-log -Data "Remote Desktop Install Found" -Class Information -Output Both
-           #update-log -Data "Version: " $MSRDC.Version
            update-log -Data "Uninstalling Remote Desktop" -Class Information -Output Both
            try{
                 Uninstall-Package -Name "Remote Desktop" -force -ErrorAction Stop| Out-Null
