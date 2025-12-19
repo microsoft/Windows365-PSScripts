@@ -47,12 +47,10 @@ Run the script using the System account. It is intended for mass deployment thro
 
 
 1. **Sign in** to [Microsoft Intune admin center](https://intune.microsoft.com)
-2. **Navigate to**: **Devices** → **Scripts and remediations** → **Windows 10 and later**
+2. **Navigate to**: **Devices** → **Scripts and remediations** → **Platform Scripts**
 3. **Click**: **Add** → **Windows 10 and later**
 
-   *Alternative path: Devices → Scripts → Platform scripts*
-
-#### Configure Basics
+ #### Configure Basics
 
 On the **Basics** page:
 
