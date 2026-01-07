@@ -5,13 +5,10 @@ See LICENSE in the project root for license information.
 #>
 
 #Microsoft Remote Desktop Client Migration Script
-#Version 1.0
+#Version 1.2
 #For more info, visit: https://github.com/microsoft/Windows365-PSScripts
 
 Param(
-    [parameter(mandatory = $false, HelpMessage = "Where to source installer payload")] 
-    [ValidateSet('Store','WinGet','MSIX')]
-    [string]$source = "Store",
     [parameter(mandatory = $false, HelpMessage = "Value to set auto update reg key")]
     [ValidateSet(0,1,2,3)]
     [int]$DisableAutoUpdate = 0,
@@ -87,12 +84,11 @@ function uninstall-MSRDC{
         }
         catch
         {
-            Update-Log -data $_.Exception.Message -Class Error -Output Both
+            Update-Log -data $_.Exception.Message -Class Information -Output Both
         }
 
         if ($MSRDC.name -eq "Remote Desktop"){
            update-log -Data "Remote Desktop Install Found" -Class Information -Output Both
-           #update-log -Data "Version: " $MSRDC.Version
            update-log -Data "Uninstalling Remote Desktop" -Class Information -Output Both
            try{
                 Uninstall-Package -Name "Remote Desktop" -force -ErrorAction Stop| Out-Null
@@ -111,51 +107,41 @@ function uninstall-MSRDC{
     }
 }
 
-#function to install Windows App from MS Store - write install process log to $env:windir\temp\WindowsAppStoreInstall.log
-function install-windowsappstore{
-   update-log -Data "Writing install process log to $env:windir\temp\WindowsAppStoreInstall.log" -Class Information -Output Both
-   try{
-        invoke-command -ScriptBlock { winget install 9N1F85V9T8BN --accept-package-agreements --accept-source-agreements} | Out-File -FilePath $env:windir\temp\WindowsAppStoreInstall.log -Append #MS Store Install 
-   }
-   catch
-   {
-        Update-Log -data $_.Exception.Message -Class Error -Output Both
-        Exit 1
-   }
-}
-
-#Function to install Windows App from Winget CDN - write install process log to $env:windir\temp\WindowsAppWinGetInstall.log
-function install-windowsappwinget{
-    update-log -Data "Writing install process log to $env:windir\temp\WindowsAppWinGetInstall.log" -Class Information -Output Both
-    try{
-        invoke-command -ScriptBlock {winget install Microsoft.WindowsApp --accept-package-agreements --accept-source-agreements} | Out-File -FilePath $env:windir\temp\WindowsAppWinGetInstall.log -Append #Winget Install
-    }
-    catch
-    {
-        Update-Log -data $_.Exception.Message -Class Error -Output Both
-        Exit 1
-    }
-}
-
 #Function to install Windows App from MSIX direct download
 function install-windowsappMSIX{
-
+    $guid = New-Guid
     try{
-        if ((test-path -Path $env:windir\Temp\WindowsApp.msix) -eq $true){Remove-Item -Path $env:windir\Temp\WindowsApp.msix -Force -ErrorAction Stop}        
+        update-log -data "Downloading payload" -Class Information -Output Both
+        #if ((test-path -Path $env:windir\Temp\WindowsApp.msix) -eq $true){Remove-Item -Path $env:windir\Temp\WindowsApp.msix -Force -ErrorAction Stop}        
         
-        $Payload = Invoke-WebRequest -uri "https://go.microsoft.com/fwlink/?linkid=2262633" -UseBasicParsing -OutFile $env:windir\Temp\WindowsApp.msix -PassThru -ErrorAction Stop
+        new-item -Path $env:windir\temp -Name $guid.guid -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        $path = $env:windir + "\temp\" + $guid.guid
+
+        $Payload = Invoke-WebRequest -uri "https://go.microsoft.com/fwlink/?linkid=2262633" -UseBasicParsing -OutFile $path\WindowsApp.msix -PassThru -ErrorAction Stop
         $filename = ($Payload.BaseResponse.ResponseUri.AbsolutePath -replace ".*/")
     
-        if ((test-path -Path $env:windir\Temp\$filename) -eq $true){Remove-Item -Path $env:windir\Temp\$filename -Force -ErrorAction Stop}    
+        #if ((test-path -Path $env:windir\Temp\$filename) -eq $true){Remove-Item -Path $env:windir\Temp\$filename -Force -ErrorAction Stop}    
     
-        Rename-Item -Path $env:windir\Temp\WindowsApp.msix -NewName $filename -Force -ErrorAction Stop
-        update-log -Data "Downloaded $filename to $env:windir\temp" -Class Information -Output Both
+        Rename-Item -Path $path\WindowsApp.msix -NewName $filename -Force -ErrorAction Stop
+        update-log -Data "Downloaded $filename to $path" -Class Information -Output Both
+        
         }
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
     }
     try{
-        Add-AppxPackage -Path $env:windir\temp\$filename -ErrorAction Stop
+        #Add-AppxPackage -Path $env:windir\temp\$filename -ErrorAction Stop
+        update-log -data "Installing Windows App MSIX package..." -Class Information -Output Both
+        add-appxprovisionedpackage -PackagePath $path\$filename -online -SkipLicense -ErrorAction Stop | Out-Null
+    }
+    catch{
+        Update-Log -data $_.Exception.Message -Class Error -Output Both
+    }
+
+    try{
+        update-log -data "Cleaning up temp folder and files..." -Class Information -Output Both
+        remove-item -Path $path -Recurse -Force -ErrorAction Stop | Out-Null
+    
     }
     catch{
         Update-Log -data $_.Exception.Message -Class Error -Output Both
@@ -164,13 +150,18 @@ function install-windowsappMSIX{
 
 #Function to check if Windows App is installed
 function invoke-WAInstallCheck{
-    if ((($testWA = get-appxpackage -name MicrosoftCorporationII.Windows365).name) -eq "MicrosoftCorporationII.Windows365"  ){
-        update-log -Data "Windows App Installation found." -Class Information -Output Both
+    
+    $WAappx = (Get-AppxProvisionedPackage -online | Where-Object {$_.DisplayName -eq "MicrosoftCorporationII.Windows365"})
+    
+    if  ($WAappx.DisplayName -eq "MicrosoftCorporationII.Windows365"){
+        update-log -Data "Windows App Provisioning Package installation found." -Class Information -Output Both
+        update-log -data $WAappx.displayname -Class Information -Output Both
+        update-log -data $WAappx.version -Class Information -Output Both
         Return 0
     }
     else
     {
-        update-log -Data "Windows App installation not found." -Class Information -Output Both
+        update-log -Data "Windows App Provisioning Package installation not found." -Class Information -Output Both
         Return 1
     }
 }
@@ -190,24 +181,19 @@ function invoke-disableautoupdate($num){
     }
 }
 
+
+
 #check if Windows App is installed. If so, skip installation. Else, install
 if ((invoke-WAInstallCheck) -eq 0){
     update-log -Data "Skipping Windows App Installation" -Class Information -Output Both
     }
 else
     {
-    if ($source -eq "Store"){
-        update-log -Data "Starting Windows App installation from Microsoft Store" -Class Information -Output Both
-        install-windowsappstore
-        }
-    if ($source -eq "WinGet"){
-        update-log -Data "Starting Windows App installation from WinGet" -Class Information -Output Both
-        install-windowsappwinget
-        }
-    if ($source -eq "MSIX"){
+
+    #if ($source -eq "MSIX"){
         update-log -Data "Starting Windows App installation from MSIX download" -Class Information -Output Both
         install-windowsappMSIX
-        }
+    #    }
 }
 
 #verify if Windows App has now been installed. If so, move to uninstalling MSRDC. Else, fail.
